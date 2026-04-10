@@ -1,0 +1,50 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv/
+ENV/
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Distribution
+*.egg
+*.whl
+
+# Unit test / coverage
+.tox/
+.coverage
+.coverage.*
+htmlcov/
+.pytest_cache/
+*.prof
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# MNEMOS runtime
+mnemos_data/
+sessions/
+*.session.json
+*.beliefs.json
+
+# API keys — never commit these
+.env
+*.env
+secrets.py
+config_local.py
+
+# ChromaDB local storage
+chroma_db/
+chromadb/
