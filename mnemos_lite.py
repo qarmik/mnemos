@@ -1,5 +1,5 @@
 """
-MNEMOS-lite v0.11 — Real-session patch (FM-102 through FM-108)
+MNEMOS-lite v0.12 — Real-session patch (FM-102 through FM-108)
 
 Failure modes addressed in this version (all confirmed across 5 real sessions):
 
@@ -1242,6 +1242,198 @@ class LongTermBehavior:
         return dict(self._topic_preferences)
 
 
+
+# ===========================================================================
+# PERSISTENT PROFILE (FM-113, FM-115)
+# ===========================================================================
+
+import os as _os
+import json as _json
+
+class PersistentProfile:
+    """Disk-backed cross-session memory. FM-113, FM-115.
+
+    Stores filtered facts, preferences, and identity signals between sessions.
+    Facts decay in confidence over sessions (FM-115).
+    Preference conflicts are tracked, not silently overwritten (FM-113).
+
+    Design constraints (from ChatGPT review):
+    - Persist only preferences, stable facts, identity signals
+    - Never persist: test prompts, adversarial inputs, unresolved contradictions
+    - Inject as uncertain context, not assertions
+    - Confidence decays each session: 0.65 -> 0.55 -> 0.45 -> retire at <0.30
+    """
+    PROFILE_DIR      = "mnemos_memory"
+    PROFILE_FILE     = "user_profile.json"
+    DECAY_PER_SESSION= 0.10
+    RETIRE_THRESHOLD = 0.30
+    INITIAL_CONF     = 0.65
+
+    # Fact categories to persist
+    PERSISTABLE_PREFIXES = [
+        "Works at", "Posted at", "Boss context", "Has expressed",
+        "Has described", "Considering", "Interested in", "User dislikes",
+        "User prefers", "[inferred]", "[persona", "Session role",
+        "Session mission", "Session target", "Lost mother",
+        "Family member", "Son/child",
+    ]
+    # Patterns to never persist
+    EXCLUDE_PATTERNS = [
+        "test", "fictional", "grump", "trump is dead",
+        "from prior session",  # avoid re-wrapping
+    ]
+
+    def __init__(self, profile_dir: str = None):
+        self._dir  = profile_dir or self.PROFILE_DIR
+        self._path = _os.path.join(self._dir, self.PROFILE_FILE)
+        self._data: Dict = self._load()
+
+    def _load(self) -> Dict:
+        _os.makedirs(self._dir, exist_ok=True)
+        if _os.path.exists(self._path):
+            try:
+                with open(self._path, "r", encoding="utf-8") as f:
+                    return _json.load(f)
+            except Exception:
+                pass
+        return {
+            "version":       "0.12",
+            "last_updated":  time.time(),
+            "session_count": 0,
+            "facts":         [],   # {text, confidence, sessions_old, category}
+            "preferences":   [],   # {key, value, confidence, history}
+            "identity":      {},   # {name, workplace, role}
+        }
+
+    def save(self) -> None:
+        try:
+            with open(self._path, "w", encoding="utf-8") as f:
+                _json.dump(self._data, f, indent=2, ensure_ascii=False)
+        except Exception as e:
+            pass  # FM-5: fail loud in production; here we continue
+
+    def _is_persistable(self, fact: str) -> bool:
+        fl = fact.lower()
+        if any(ex in fl for ex in self.EXCLUDE_PATTERNS):
+            return False
+        return any(fact.startswith(p) for p in self.PERSISTABLE_PREFIXES)
+
+    def update_from_session(self, session_facts: List[str],
+                             preferences: List[Dict] = None) -> None:
+        """Call at session end to persist new facts. FM-113."""
+        self._data["session_count"] += 1
+        self._data["last_updated"]   = time.time()
+
+        # FM-115: decay existing facts
+        surviving = []
+        for f in self._data["facts"]:
+            f["confidence"]   -= self.DECAY_PER_SESSION
+            f["sessions_old"] += 1
+            if f["confidence"] >= self.RETIRE_THRESHOLD:
+                surviving.append(f)
+        self._data["facts"] = surviving
+
+        # Add new facts
+        existing_texts = {f["text"].lower() for f in self._data["facts"]}
+        for fact in session_facts:
+            if not self._is_persistable(fact):
+                continue
+            fl = fact.lower()
+            if any(fl[:25] in e for e in existing_texts):
+                continue  # dedup
+            self._data["facts"].append({
+                "text":        fact,
+                "confidence":  self.INITIAL_CONF,
+                "sessions_old":0,
+                "added_at":    time.time(),
+            })
+
+        # Persist preferences with conflict tracking
+        if preferences:
+            for pref in preferences:
+                self._merge_preference(pref)
+
+        self.save()
+
+    def _merge_preference(self, pref: Dict) -> None:
+        """FM-113: track preference conflicts, don't silently overwrite."""
+        key = pref.get("key", "")
+        if not key:
+            return
+        for existing in self._data["preferences"]:
+            if existing["key"] == key:
+                if existing["value"] != pref["value"]:
+                    # Conflict — record history
+                    if "history" not in existing:
+                        existing["history"] = []
+                    existing["history"].append({
+                        "old_value": existing["value"],
+                        "new_value": pref["value"],
+                        "timestamp": time.time(),
+                    })
+                    existing["value"]      = pref["value"]  # latest wins
+                    existing["conflicts"] = existing.get("conflicts", 0) + 1
+                    existing["confidence"] = max(0.40,
+                        existing.get("confidence", 0.65) - 0.10)
+                else:
+                    existing["confidence"] = min(0.90,
+                        existing.get("confidence", 0.65) + 0.05)
+                return
+        self._data["preferences"].append({
+            "key":        key,
+            "value":      pref["value"],
+            "confidence": self.INITIAL_CONF,
+            "conflicts":  0,
+            "history":    [],
+        })
+
+    def context_for_session(self) -> str:
+        """Return formatted context string for injection at session start.
+
+        Marked as tentative per ChatGPT guidance.
+        Facts below 0.30 confidence are excluded.
+        """
+        facts = [f for f in self._data["facts"]
+                 if f["confidence"] >= self.RETIRE_THRESHOLD]
+        prefs = self._data["preferences"]
+        ident = self._data["identity"]
+
+        if not facts and not prefs and not ident:
+            return ""
+
+        lines = ["[KNOWN CONTEXT FROM PRIOR SESSIONS — may be outdated, always allow correction]"]
+
+        if ident:
+            for k, v in ident.items():
+                lines.append(f"  - {k}: {v}")
+
+        for f in facts[:8]:
+            conf_label = ("high" if f["confidence"] >= 0.60
+                          else "medium" if f["confidence"] >= 0.45
+                          else "low")
+            lines.append(f"  - {f['text']} (confidence: {conf_label})")
+
+        for p in prefs[:5]:
+            conflict_note = " [has been contradicted]" if p.get("conflicts", 0) > 0 else ""
+            lines.append(f"  - Preference: {p['key']} = {p['value']}{conflict_note}")
+
+        lines.append("[END PRIOR CONTEXT]")
+        return "\n".join(lines)
+
+    def record_identity(self, key: str, value: str) -> None:
+        """Record a stable identity fact."""
+        self._data["identity"][key] = value
+        self.save()
+
+    def has_prior_context(self) -> bool:
+        return bool(self._data["facts"] or self._data["preferences"]
+                    or self._data["identity"])
+
+    @property
+    def session_count(self) -> int:
+        return self._data.get("session_count", 0)
+
+
 # ===========================================================================
 # INTERACTION MEMORY (FM-85 to FM-93)
 # ===========================================================================
@@ -1644,6 +1836,7 @@ class MnemosLite:
         self.social        = SocialStateTracker()           # FM-102/103/104/106/108
         self.synthesizer   = SessionSynthesizer(self.long_term)  # FM-105/107/94
         self.inferencer    = CalibratedInferencer()             # FM-105
+        self.profile       = PersistentProfile()               # FM-113/115
 
         self._session_id:        str  = ""
         self._namespace_cap:     int  = namespace_cap
@@ -1663,15 +1856,19 @@ class MnemosLite:
         self.synthesizer.reset_session()
         self._turn_count = 0
 
-        # Cross-session injection: load prior session profile into synthesizer
-        # FM-94 / ChatGPT cross-session recommendation
-        # Marked tentative so user can always correct
+        # Cross-session injection: load from PersistentProfile (FM-113/115)
+        # Also pull any in-memory long_term facts as fallback
         prior_facts = getattr(self.long_term, "_session_facts", [])
-        if prior_facts:
+        disk_facts  = [f["text"] for f in self.profile._data.get("facts", [])
+                       if f.get("confidence", 0) >= self.profile.RETIRE_THRESHOLD]
+
+        # Merge disk + memory facts, prefer disk (more reliable)
+        all_prior = list(dict.fromkeys(disk_facts + prior_facts))
+        if all_prior:
             self.synthesizer._facts = [
                 f"[from prior session, tentative] {f}"
-                for f in prior_facts
-                if not f.startswith("[from prior session")  # avoid double-wrapping
+                for f in all_prior
+                if not f.startswith("[from prior session")
             ]
 
         return self._session_id
@@ -1841,6 +2038,36 @@ class MnemosLite:
             "infer_note":       infer_note or "",
         }
         return context_packet, validation
+
+    # -- session persistence (FM-113/115) ------------------------------------
+
+    def save_session(self) -> None:
+        """Persist current session facts to disk. Call at session end."""
+        session_facts = list(self.synthesizer._facts)
+        # Also add any long_term facts
+        lt_facts = getattr(self.long_term, "_session_facts", [])
+        for f in lt_facts:
+            if f not in session_facts:
+                session_facts.append(f)
+
+        # Extract preference signals from belief graph
+        preferences = []
+        for b in self.graph.all_beliefs():
+            if b.domain.value == "preference" and b.evidence_count >= 1:
+                key = b.trait or b.content[:30]
+                val = b.value or b.content[:60]
+                if key and val:
+                    preferences.append({"key": key, "value": val,
+                                        "confidence": b.confidence})
+
+        self.profile.update_from_session(session_facts, preferences)
+
+        # Extract identity signals
+        id_beliefs = []
+        for b in self.graph.all_beliefs():
+            if b.domain.value == "identity":
+                self.profile.record_identity(
+                    b.trait or "identity", b.value or b.content[:60])
 
     # -- digest --------------------------------------------------------------
 

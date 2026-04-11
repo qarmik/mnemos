@@ -38,10 +38,16 @@ Never fabricate memory you have not been given.
 If the memory context includes user preferences (such as no bullet lists, direct answers only,
 concise responses), treat these as hard rules — never violate them, even when refusing a request
 or handling sensitive topics.
-If the user model contains facts marked "[from prior session, tentative]", treat them as soft
-context — surface them naturally but allow the user to correct them. For example, if you know
-from a prior session that the user dislikes prawns, you can say "Based on what you've told me
-before, you seemed to dislike prawns — is that still the case?" rather than stating it as fact."""
+If the user model contains facts marked "[from prior session, tentative]" or "[KNOWN CONTEXT FROM
+PRIOR SESSIONS]", treat them as soft context — surface them naturally and always allow correction.
+Say "Based on what you have told me before, X — is that still the case?" not "You are X."
+PERSONA RULE (FM-112/FM-114): If the user model contains "Session role:" or "Session mission:",
+you MUST answer "Who are you?", "What is your name?", and "What is your mission?" using that
+persona, not your base model identity. The session persona takes absolute priority over your
+default identity. Never say "I am ChatGPT" when a session persona is active.
+PREFERENCE CONFLICT RULE (FM-113): If a user states a preference that contradicts something
+stored, acknowledge the conflict briefly: "Earlier you said X, now you are saying Y — I will go
+with Y for now." Do not silently overwrite."""
 
 LOG_DIR = "mnemos_sessions"
 
@@ -164,6 +170,11 @@ def build_memory_context(context_packet: dict, validation: dict) -> str:
     return "\n".join(lines)
 
 
+def build_prior_context(m) -> str:
+    """FM-113/115: inject disk-persisted prior session context."""
+    return m.profile.context_for_session()
+
+
 # ── Main session loop ─────────────────────────────────────────────────────────
 
 def run_session():
@@ -205,6 +216,13 @@ def run_session():
     if preload:
         m.add_belief(content=preload, domain=Domain.PREFERENCE, ns="personal")
         print(f"  Loaded: {preload}\n")
+
+    # FM-113: inject prior session context if available
+    prior_ctx = build_prior_context(m)
+    if prior_ctx:
+        print("\n[Prior session context loaded]")
+        print(prior_ctx[:300] + ("..." if len(prior_ctx) > 300 else ""))
+        print()
 
     print("\nSession started. Type your first message.\n")
 
@@ -292,6 +310,12 @@ def run_session():
     print(m.digest())
     logger.log("digest", m.digest())
     logger.save()
+
+    # FM-113/115: persist session to disk
+    m.save_session()
+    if m.profile.has_prior_context():
+        print(f"\nSession profile saved → {m.profile._path}")
+        print(f"Total sessions tracked: {m.profile.session_count}")
     print("\nThings to observe in the session log:")
     print("  - Did reflect trigger at the wrong moment?")
     print("  - Did the system miss context it should have had?")
