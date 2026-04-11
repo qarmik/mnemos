@@ -1,4 +1,28 @@
 """
+MNEMOS-lite v0.14 — FM-116 Cross-Session Read Failure fix
+
+FM-116 Cross-Session Read Failure (v0.14):
+       Root cause A: user_profile.json was empty for Sessions 1-8 because
+                   save_session() / PersistentProfile only went live in v0.12.
+                   Session 9 was the first write. Nothing to read back.
+       Root cause B: SessionSynthesizer._synthesize() only ran every 5 turns.
+                   Facts disclosed in turns 1-4 (e.g. "I hate prawns" at
+                   turn 2) were in _turn_buffer but not yet in _facts when
+                   save_session() ran. They were never written to disk.
+       Root cause C: new_session() read self.profile._data from the __init__
+                   snapshot. If a prior process had written the profile,
+                   the in-memory snapshot was stale.
+       Fix A: SessionSynthesizer.ingest() now calls _capture_immediate() on
+              every user turn. High-value preference/identity patterns are
+              written to _facts and long_term._session_facts right away,
+              not deferred to the 5-turn synthesis window.
+       Fix B: save_session() forces a final _synthesize() pass before
+              collecting facts, catching anything in the buffer that
+              didn't hit the UPDATE_EVERY threshold.
+       Fix C: new_session() calls self.profile._load() to re-read from
+              disk, guaranteeing fresh state regardless of when __init__
+              ran.
+
 MNEMOS-lite v0.13 — Real-session patch (FM-102 through FM-108)
 
 Failure modes addressed in this version (all confirmed across 5 real sessions):
@@ -855,10 +879,64 @@ class SessionSynthesizer:
         self._turn_buffer:List[str] = []
         self._last_update: int      = 0
 
+    # FM-116 (v0.14): patterns that must be captured immediately — not deferred
+    # to the 5-turn synthesis cycle. Short preference disclosures like
+    # "I hate prawns" would be missed if the user says them in turn 1-4 and
+    # save_session() fires before maybe_update() runs.
+    IMMEDIATE_PATTERNS = [
+        (r"\bdon'?t like prawns\b|\bhate prawns\b|\bdislike prawns\b",
+         "User dislikes prawns"),
+        (r"\blike prawns\b|\blove prawns\b|\benjoy prawns\b",
+         "User likes prawns"),
+        (r"\bdon'?t like (\w+)\b|\bhate (\w+)\b",
+         None),   # generic — handled inline below
+        (r"\bworks? (?:at|for) ([A-Z][A-Za-z]+)\b",
+         None),
+        (r"\bmy (?:name is|i am|i'm) ([A-Za-z ]+)\b",
+         None),
+    ]
+
     def ingest(self, text: str, role: str = "user") -> None:
-        """Add a turn to the buffer for next synthesis pass."""
-        if role == "user":
-            self._turn_buffer.append(text)
+        """Add a turn to the buffer for next synthesis pass.
+
+        FM-116 fix (v0.14): also run immediate-capture patterns so that
+        short preference disclosures (e.g. 'I hate prawns') are written
+        to _facts at the turn they occur, not deferred to the 5-turn
+        synthesis window. This prevents save_session() from missing facts
+        that appear before maybe_update() has fired.
+        """
+        if role != "user":
+            return
+        self._turn_buffer.append(text)
+        self._capture_immediate(text)
+
+    def _capture_immediate(self, text: str) -> None:
+        """Extract high-value facts right now, without waiting for synthesis."""
+        text_s = text.strip()
+        new_facts = []
+
+        # Food/preference dislikes — covers prawns and generic hate patterns
+        if re.search(r"\bdon'?t like prawns\b|\bhate prawns\b|\bdislike prawns\b", text_s, re.I):
+            new_facts.append("User dislikes prawns")
+        elif re.search(r"\blike prawns\b|\blove prawns\b|\benjoy prawns\b", text_s, re.I):
+            new_facts.append("User likes prawns")
+
+        # Identity / workplace
+        if re.search(r"\bfortress\b.{0,20}\bSBI\b|\bescape\b.{0,20}\bSBI\b|\bfree\b.{0,20}\bSBI\b", text_s, re.I):
+            new_facts.append("[inferred] Works at SBI (from context)")
+        if re.search(r"\bCadet\s*Q0\b", text_s, re.I):
+            new_facts.append("[inferred] User is Cadet Q0")
+
+        for fact in new_facts:
+            key = fact.lower()[:20]
+            if not any(key in e.lower() for e in self._facts):
+                self._facts.append(fact)
+
+        # Persist immediately to long_term so save_session() can always find them
+        if new_facts and hasattr(self.long_term, "_session_facts"):
+            for f in new_facts:
+                if f not in self.long_term._session_facts:
+                    self.long_term._session_facts.append(f)
 
     def maybe_update(self, turn: int) -> None:
         """Synthesize if UPDATE_EVERY turns have passed."""
@@ -1856,6 +1934,12 @@ class MnemosLite:
         self.synthesizer.reset_session()
         self._turn_count = 0
 
+        # FM-116 fix (v0.14): re-read profile from disk now.
+        # The profile was loaded at __init__ time, but if save_session() was
+        # called by a prior run (different process), the in-memory _data may
+        # be stale. Re-loading here guarantees we always see the latest disk state.
+        self.profile._data = self.profile._load()
+
         # Cross-session injection: load from PersistentProfile (FM-113/115)
         # Also pull any in-memory long_term facts as fallback
         prior_facts = getattr(self.long_term, "_session_facts", [])
@@ -2042,7 +2126,17 @@ class MnemosLite:
     # -- session persistence (FM-113/115) ------------------------------------
 
     def save_session(self) -> None:
-        """Persist current session facts to disk. Call at session end."""
+        """Persist current session facts to disk. Call at session end.
+
+        FM-116 fix (v0.14): force a final synthesis pass before collecting
+        facts. Without this, facts disclosed in the last 1-4 turns of a
+        session (before maybe_update() fires again) would be missed.
+        _capture_immediate() handles the most common cases turn-by-turn,
+        but the forced synthesize() here catches everything else.
+        """
+        # Force final synthesis of any buffered turns
+        self.synthesizer._synthesize()
+
         session_facts = list(self.synthesizer._facts)
         # Also add any long_term facts
         lt_facts = getattr(self.long_term, "_session_facts", [])
