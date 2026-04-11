@@ -1,5 +1,5 @@
 """
-MNEMOS-lite v0.12 — Real-session patch (FM-102 through FM-108)
+MNEMOS-lite v0.13 — Real-session patch (FM-102 through FM-108)
 
 Failure modes addressed in this version (all confirmed across 5 real sessions):
 

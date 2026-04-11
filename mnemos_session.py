@@ -47,7 +47,16 @@ persona, not your base model identity. The session persona takes absolute priori
 default identity. Never say "I am ChatGPT" when a session persona is active.
 PREFERENCE CONFLICT RULE (FM-113): If a user states a preference that contradicts something
 stored, acknowledge the conflict briefly: "Earlier you said X, now you are saying Y — I will go
-with Y for now." Do not silently overwrite."""
+with Y for now." Do not silently overwrite.
+BELIEF ACTIVATION RULE (FM-110b): When you know something about the user from memory — a
+preference, a constraint, a pattern — use it to inform your response proactively, not just
+when directly asked. If the user hates prawns and you are discussing food or dinner, mention
+it naturally. If the user works at SBI and asks about career, connect it. Beliefs should
+shape behavior, not just answer recall queries.
+EPISTEMIC ATTEMPT RULE: When asked to do something simple like count characters, estimate
+a word count, or make a rough calculation, attempt it with stated uncertainty rather than
+refusing entirely. Say "approximately X — I can't be exact" rather than "I can't do that."
+Refusal is a last resort, not a default posture."""
 
 LOG_DIR = "mnemos_sessions"
 
@@ -88,8 +97,13 @@ class SessionLogger:
 
 # ── Build memory context string for LLM prompt ───────────────────────────────
 
-def build_memory_context(context_packet: dict, validation: dict) -> str:
+def build_memory_context(context_packet: dict, validation: dict,
+                          cold_start_note: str = "") -> str:
     lines = ["[MEMORY CONTEXT]"]
+
+    # FM-116: cold start framing
+    if cold_start_note:
+        lines.append(f"Session note: {cold_start_note}")
 
     constraints = context_packet.get("constraints", [])
     if constraints:
@@ -175,6 +189,24 @@ def build_prior_context(m) -> str:
     return m.profile.context_for_session()
 
 
+def get_cold_start_note(m) -> str:
+    """FM-116: if this is the first tracked session, say so clearly.
+
+    Prevents 'I don't have a stored preference' sounding like amnesia.
+    """
+    if m.profile.session_count <= 1:
+        return (
+            "IMPORTANT: This is the first session I have a persistent record of. "
+            "I may not have context from earlier conversations with this user. "
+            "If the user references something from a prior session I don't have, "
+            "say clearly: 'I only have memory starting from this session — "
+            "I may not have that from before. Tell me and I'll track it going forward.' "
+            "Do NOT say 'I don't have a stored preference' as if you forgot — "
+            "you simply haven't been tracking yet."
+        )
+    return ""
+
+
 # ── Main session loop ─────────────────────────────────────────────────────────
 
 def run_session():
@@ -218,10 +250,14 @@ def run_session():
         print(f"  Loaded: {preload}\n")
 
     # FM-113: inject prior session context if available
-    prior_ctx = build_prior_context(m)
+    prior_ctx    = build_prior_context(m)
+    cold_start   = get_cold_start_note(m)
     if prior_ctx:
         print("\n[Prior session context loaded]")
         print(prior_ctx[:300] + ("..." if len(prior_ctx) > 300 else ""))
+        print()
+    elif cold_start:
+        print("\n[First tracked session — no prior context]")
         print()
 
     print("\nSession started. Type your first message.\n")
@@ -262,7 +298,8 @@ def run_session():
 
         # MNEMOS context assembly
         context_packet, validation = m.ask(user_input, namespace="personal")
-        memory_context = build_memory_context(context_packet, validation)
+        memory_context = build_memory_context(context_packet, validation,
+                                                   cold_start_note=get_cold_start_note(m))
 
         # Build prompt for LLM
         user_message = f"{memory_context}\nUser: {user_input}"
