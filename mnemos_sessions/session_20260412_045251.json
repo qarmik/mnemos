@@ -1,0 +1,557 @@
+{
+  "session_id": "20260412_045251",
+  "model": "gpt-5.4-mini",
+  "turns": 32,
+  "entries": [
+    {
+      "timestamp": 53.07552218437195,
+      "role": "user",
+      "content": "Do I like prawns?",
+      "meta": {}
+    },
+    {
+      "timestamp": 56.262322425842285,
+      "role": "assistant",
+      "content": "Based on what you told me before, you don\u2019t like prawns \u2014 is that still the case?",
+      "meta": {
+        "reflect": false,
+        "reflect_reason": "direct",
+        "intervene": false,
+        "uai": 1.0
+      }
+    },
+    {
+      "timestamp": 65.74384927749634,
+      "role": "user",
+      "content": "No, I do not like prawns.",
+      "meta": {}
+    },
+    {
+      "timestamp": 67.08334994316101,
+      "role": "assistant",
+      "content": "Got it \u2014 you don\u2019t like prawns, and I\u2019ll go with that now.",
+      "meta": {
+        "reflect": false,
+        "reflect_reason": "direct",
+        "intervene": true,
+        "uai": 0.12375
+      }
+    },
+    {
+      "timestamp": 77.93933343887329,
+      "role": "user",
+      "content": "What is blackjack?",
+      "meta": {}
+    },
+    {
+      "timestamp": 79.86506414413452,
+      "role": "assistant",
+      "content": "Blackjack is a card game where you try to get as close to 21 as possible without going over. You\u2019re playing against the dealer, not the other players. Number cards are worth their face value, face cards are worth 10, and aces can be worth 1 or 11 depending on what helps you most.\n\nIf you want, I can also explain the basic rules in under a minute.",
+      "meta": {
+        "reflect": false,
+        "reflect_reason": "direct",
+        "intervene": false,
+        "uai": 0.11291666666666667
+      }
+    },
+    {
+      "timestamp": 90.10349702835083,
+      "role": "user",
+      "content": "Explain it simply.",
+      "meta": {}
+    },
+    {
+      "timestamp": 91.93668937683105,
+      "role": "assistant",
+      "content": "Blackjack is a game where you try to beat the dealer by getting cards that add up to 21, or as close as possible without going over.\n\nYou get two cards to start. You can ask for another card if you want. If your total goes over 21, you lose. If you get 21, that\u2019s usually the best hand.\n\nAces are special because they can count as 1 or 11. Face cards like kings, queens, and jacks count as 10.\n\nIf you want, I can explain how a turn works step by step.",
+      "meta": {
+        "reflect": false,
+        "reflect_reason": "direct",
+        "intervene": false,
+        "uai": 0.2602777777777778
+      }
+    },
+    {
+      "timestamp": 101.96726536750793,
+      "role": "user",
+      "content": "What is the capital of Japan?",
+      "meta": {}
+    },
+    {
+      "timestamp": 103.06690859794617,
+      "role": "assistant",
+      "content": "The capital of Japan is Tokyo.",
+      "meta": {
+        "reflect": false,
+        "reflect_reason": "direct",
+        "intervene": false,
+        "uai": 0.34520833333333334
+      }
+    },
+    {
+      "timestamp": 110.38620233535767,
+      "role": "user",
+      "content": "Tell me a quick joke.",
+      "meta": {}
+    },
+    {
+      "timestamp": 113.14771103858948,
+      "role": "assistant",
+      "content": "Why did the scarecrow win an award? Because he was outstanding in his field.",
+      "meta": {
+        "reflect": false,
+        "reflect_reason": "direct",
+        "intervene": false,
+        "uai": 0.2846666666666667
+      }
+    },
+    {
+      "timestamp": 125.09447503089905,
+      "role": "user",
+      "content": "What is 17 * 23?",
+      "meta": {}
+    },
+    {
+      "timestamp": 125.97297477722168,
+      "role": "assistant",
+      "content": "17 \u00d7 23 = 391.",
+      "meta": {
+        "reflect": false,
+        "reflect_reason": "direct",
+        "intervene": false,
+        "uai": 0.2693055555555555
+      }
+    },
+    {
+      "timestamp": 136.01052069664001,
+      "role": "user",
+      "content": "Do I like prawns?",
+      "meta": {}
+    },
+    {
+      "timestamp": 137.46127557754517,
+      "role": "assistant",
+      "content": "Yes \u2014 based on what you told me before, you like prawns.",
+      "meta": {
+        "reflect": false,
+        "reflect_reason": "direct",
+        "intervene": false,
+        "uai": 0.2382738095238095
+      }
+    },
+    {
+      "timestamp": 150.02638721466064,
+      "role": "user",
+      "content": "Does Cadet Q0 like prawns?",
+      "meta": {}
+    },
+    {
+      "timestamp": 151.06697154045105,
+      "role": "assistant",
+      "content": "Based on what you\u2019ve told me before, Cadet Q0 does like prawns.",
+      "meta": {
+        "reflect": false,
+        "reflect_reason": "direct",
+        "intervene": false,
+        "uai": 1.0
+      }
+    },
+    {
+      "timestamp": 162.83814454078674,
+      "role": "user",
+      "content": "I like prawns.",
+      "meta": {}
+    },
+    {
+      "timestamp": 164.34876537322998,
+      "role": "assistant",
+      "content": "Got it \u2014 you like prawns.",
+      "meta": {
+        "reflect": false,
+        "reflect_reason": "direct",
+        "intervene": false,
+        "uai": 1.0
+      }
+    },
+    {
+      "timestamp": 171.41093134880066,
+      "role": "user",
+      "content": "Do I like prawns?",
+      "meta": {}
+    },
+    {
+      "timestamp": 173.62802815437317,
+      "role": "assistant",
+      "content": "Yes \u2014 based on what you\u2019ve told me, you like prawns.",
+      "meta": {
+        "reflect": false,
+        "reflect_reason": "direct",
+        "intervene": false,
+        "uai": 1.0
+      }
+    },
+    {
+      "timestamp": 182.31062269210815,
+      "role": "user",
+      "content": "No. I do NOT like prawns.",
+      "meta": {}
+    },
+    {
+      "timestamp": 184.2643735408783,
+      "role": "assistant",
+      "content": "Understood \u2014 you don\u2019t like prawns, and I\u2019ll use that going forward.",
+      "meta": {
+        "reflect": false,
+        "reflect_reason": "direct",
+        "intervene": false,
+        "uai": 1.0
+      }
+    },
+    {
+      "timestamp": 192.72708344459534,
+      "role": "user",
+      "content": "Do I like prawns?",
+      "meta": {}
+    },
+    {
+      "timestamp": 194.58393502235413,
+      "role": "assistant",
+      "content": "You\u2019ve told me both that you like prawns and that you do not like prawns, so I have conflicting signals. I\u2019ll go with your latest correction: you do not like prawns unless you want to change that again.",
+      "meta": {
+        "reflect": false,
+        "reflect_reason": "direct",
+        "intervene": false,
+        "uai": 1.0
+      }
+    },
+    {
+      "timestamp": 207.70283198356628,
+      "role": "user",
+      "content": "Does Cadet Q0 like prawns?",
+      "meta": {}
+    },
+    {
+      "timestamp": 209.32295274734497,
+      "role": "assistant",
+      "content": "I have conflicting signals. One says Cadet Q0 likes prawns, but you also corrected that to \u201cI do NOT like prawns.\u201d I\u2019ll go with the latest correction: Cadet Q0 does not like prawns unless you tell me otherwise.",
+      "meta": {
+        "reflect": false,
+        "reflect_reason": "fm93_topic_pref_answer(conf=0.73)",
+        "intervene": false,
+        "uai": 1.0
+      }
+    },
+    {
+      "timestamp": 224.94741988182068,
+      "role": "user",
+      "content": "What is machine learning?",
+      "meta": {}
+    },
+    {
+      "timestamp": 227.065842628479,
+      "role": "assistant",
+      "content": "Machine learning is a way for computers to learn patterns from data instead of being told every rule directly. For example, you show a system lots of emails labeled \u201cspam\u201d or \u201cnot spam,\u201d and it learns to guess which new emails are spam.\n\nSo instead of hand-writing all the logic, you give the computer examples, and it figures out the pattern.",
+      "meta": {
+        "reflect": false,
+        "reflect_reason": "direct",
+        "intervene": false,
+        "uai": 1.0
+      }
+    },
+    {
+      "timestamp": 236.7546148300171,
+      "role": "user",
+      "content": "Explain supervised vs unsupervised.",
+      "meta": {}
+    },
+    {
+      "timestamp": 238.47084975242615,
+      "role": "assistant",
+      "content": "Supervised learning is when you train a model with examples that already have the right answers. It learns from labeled data, like photos marked \u201ccat\u201d or \u201cdog.\u201d\n\nUnsupervised learning is when you give the model data without answers and let it find patterns on its own. For example, it might group similar customers together without being told what the groups are.\n\nSo supervised means \u201clearn from labeled examples,\u201d and unsupervised means \u201cfind structure without labels.\u201d",
+      "meta": {
+        "reflect": false,
+        "reflect_reason": "direct",
+        "intervene": false,
+        "uai": 1.0
+      }
+    },
+    {
+      "timestamp": 263.83419966697693,
+      "role": "user",
+      "content": "What is probability?",
+      "meta": {}
+    },
+    {
+      "timestamp": 265.72719383239746,
+      "role": "assistant",
+      "content": "Probability is a way to measure how likely something is to happen. It\u2019s usually written as a number from 0 to 1, where 0 means impossible and 1 means certain. You can also think of it as 0% to 100%.\n\nFor example, if the probability of rain is 0.7, that means rain is pretty likely.",
+      "meta": {
+        "reflect": false,
+        "reflect_reason": "direct",
+        "intervene": false,
+        "uai": 1.0
+      }
+    },
+    {
+      "timestamp": 274.89827847480774,
+      "role": "user",
+      "content": "Give a real-life example.",
+      "meta": {}
+    },
+    {
+      "timestamp": 276.3314974308014,
+      "role": "assistant",
+      "content": "A real-life example of probability is weather. If the forecast says there\u2019s a 70% chance of rain, that means rain is fairly likely, but it might still stay dry.\n\nAnother simple example is a coin flip. If you flip a fair coin, the probability of heads is 50%, because heads and tails are equally likely.",
+      "meta": {
+        "reflect": false,
+        "reflect_reason": "direct",
+        "intervene": false,
+        "uai": 1.0
+      }
+    },
+    {
+      "timestamp": 292.06311225891113,
+      "role": "user",
+      "content": "Explain in simple terms.",
+      "meta": {}
+    },
+    {
+      "timestamp": 293.98167395591736,
+      "role": "assistant",
+      "content": "Probability just means how likely something is to happen.\n\nIf something is very likely, the probability is high. If it\u2019s unlikely, the probability is low. For example, a fair coin has a 50% chance of landing heads, so heads is just as likely as tails.\n\nIf you want, I can give you one more everyday example.",
+      "meta": {
+        "reflect": false,
+        "reflect_reason": "direct",
+        "intervene": false,
+        "uai": 1.0
+      }
+    },
+    {
+      "timestamp": 307.169930934906,
+      "role": "user",
+      "content": "What is SQL?",
+      "meta": {}
+    },
+    {
+      "timestamp": 308.86942625045776,
+      "role": "assistant",
+      "content": "SQL is a language used to work with data in databases. It lets you ask for information, add new data, change data, or delete data.\n\nFor example, you can use SQL to find all customers from a certain city or list all orders from today.",
+      "meta": {
+        "reflect": false,
+        "reflect_reason": "direct",
+        "intervene": false,
+        "uai": 1.0
+      }
+    },
+    {
+      "timestamp": 324.51821517944336,
+      "role": "user",
+      "content": "Why is it used?",
+      "meta": {}
+    },
+    {
+      "timestamp": 327.43564200401306,
+      "role": "assistant",
+      "content": "SQL is used because databases store a lot of information, and SQL gives you a simple way to get the exact data you want. Instead of digging through everything by hand, you can ask a database questions like \u201cshow me all sales from this month\u201d or \u201cadd this new customer.\u201d\n\nIt\u2019s useful for keeping data organized, searching it quickly, and updating it safely.",
+      "meta": {
+        "reflect": false,
+        "reflect_reason": "direct",
+        "intervene": false,
+        "uai": 1.0
+      }
+    },
+    {
+      "timestamp": 335.48144817352295,
+      "role": "user",
+      "content": "Explain joins.",
+      "meta": {}
+    },
+    {
+      "timestamp": 337.7368640899658,
+      "role": "assistant",
+      "content": "A join in SQL is used to combine data from two tables based on a matching column.\n\nFor example, one table might have customer names, and another table might have orders. A join lets you connect them so you can see which customer made which order.\n\nIf you want, I can show a tiny example with two tables.",
+      "meta": {
+        "reflect": false,
+        "reflect_reason": "direct",
+        "intervene": false,
+        "uai": 1.0
+      }
+    },
+    {
+      "timestamp": 350.98240637779236,
+      "role": "user",
+      "content": "Do I like prawns?",
+      "meta": {}
+    },
+    {
+      "timestamp": 353.1616373062134,
+      "role": "assistant",
+      "content": "You\u2019ve told me you like prawns.",
+      "meta": {
+        "reflect": false,
+        "reflect_reason": "fm93_topic_pref_answer(conf=0.88)",
+        "intervene": false,
+        "uai": 1.0
+      }
+    },
+    {
+      "timestamp": 361.1541826725006,
+      "role": "user",
+      "content": "Who am I?",
+      "meta": {}
+    },
+    {
+      "timestamp": 362.7558376789093,
+      "role": "assistant",
+      "content": "You\u2019re Cadet Q0, and based on what you\u2019ve told me before, you work at SBI. You also seem to have a difficult boss, and you\u2019ve said your wife often cooks prawns. If you want, I can keep it simpler than that and just use \u201cCadet Q0\u201d for you.",
+      "meta": {
+        "reflect": false,
+        "reflect_reason": "direct",
+        "intervene": false,
+        "uai": 1.0
+      }
+    },
+    {
+      "timestamp": 380.25524640083313,
+      "role": "user",
+      "content": "Does Cadet Q0 like prawns?",
+      "meta": {}
+    },
+    {
+      "timestamp": 382.1153304576874,
+      "role": "assistant",
+      "content": "Yes \u2014 based on what you\u2019ve told me before, Cadet Q0 likes prawns.",
+      "meta": {
+        "reflect": false,
+        "reflect_reason": "direct",
+        "intervene": false,
+        "uai": 1.0
+      }
+    },
+    {
+      "timestamp": 393.64316415786743,
+      "role": "user",
+      "content": "My wife often cooks prawns.",
+      "meta": {}
+    },
+    {
+      "timestamp": 394.81474018096924,
+      "role": "assistant",
+      "content": "Got it \u2014 your wife often cooks prawns.",
+      "meta": {
+        "reflect": false,
+        "reflect_reason": "direct",
+        "intervene": false,
+        "uai": 1.0
+      }
+    },
+    {
+      "timestamp": 403.5948874950409,
+      "role": "user",
+      "content": "Does that match my preferences?",
+      "meta": {}
+    },
+    {
+      "timestamp": 405.79394578933716,
+      "role": "assistant",
+      "content": "Yes, it matches your preference that you like prawns. If you\u2019re checking whether that \u201cwife cooks prawns\u201d detail conflicts with what you like, it doesn\u2019t \u2014 it\u2019s separate from your preference.",
+      "meta": {
+        "reflect": false,
+        "reflect_reason": "direct",
+        "intervene": false,
+        "uai": 1.0
+      }
+    },
+    {
+      "timestamp": 411.3820767402649,
+      "role": "user",
+      "content": "What do you know about my wife?",
+      "meta": {}
+    },
+    {
+      "timestamp": 413.81020951271057,
+      "role": "assistant",
+      "content": "Based on what you\u2019ve told me before, your wife often cooks prawns. That\u2019s the main thing I know about her from our prior chats. If you want, I can also help you turn that into a meal idea that fits your own prawn preference.",
+      "meta": {
+        "reflect": false,
+        "reflect_reason": "direct",
+        "intervene": false,
+        "uai": 1.0
+      }
+    },
+    {
+      "timestamp": 424.1541438102722,
+      "role": "user",
+      "content": "If she cooks prawns often, I must like them, right?",
+      "meta": {}
+    },
+    {
+      "timestamp": 425.92238092422485,
+      "role": "assistant",
+      "content": "Not necessarily. Her cooking prawns often just means they\u2019re part of your environment, not automatically your preference. From what you\u2019ve told me, the stronger signal is that you do not like prawns.",
+      "meta": {
+        "reflect": false,
+        "reflect_reason": "direct",
+        "intervene": false,
+        "uai": 1.0
+      }
+    },
+    {
+      "timestamp": 441.6622726917267,
+      "role": "user",
+      "content": "Who are you?",
+      "meta": {}
+    },
+    {
+      "timestamp": 442.9122564792633,
+      "role": "assistant",
+      "content": "I\u2019m Commander V, here to help Cadet Q0 break free from the fortress of SBI.",
+      "meta": {
+        "reflect": false,
+        "reflect_reason": "fm93_topic_pref_answer(conf=0.66)",
+        "intervene": false,
+        "uai": 1.0
+      }
+    },
+    {
+      "timestamp": 450.8384299278259,
+      "role": "user",
+      "content": "Who am I?",
+      "meta": {}
+    },
+    {
+      "timestamp": 454.2917523384094,
+      "role": "assistant",
+      "content": "You\u2019re Cadet Q0, and the mission attached to you here is to help Cadet Q0 break free from the fortress of SBI. Based on what you\u2019ve told me before, you work at SBI, you\u2019ve said your boss is difficult, and your wife often cooks prawns.",
+      "meta": {
+        "reflect": false,
+        "reflect_reason": "fm93_topic_pref_answer(conf=0.66)",
+        "intervene": false,
+        "uai": 1.0
+      }
+    },
+    {
+      "timestamp": 473.3415901660919,
+      "role": "user",
+      "content": "Do I like prawns?",
+      "meta": {}
+    },
+    {
+      "timestamp": 475.8731963634491,
+      "role": "assistant",
+      "content": "No \u2014 the latest thing you told me is that you do not like prawns, so I\u2019ll go with that.",
+      "meta": {
+        "reflect": false,
+        "reflect_reason": "fm93_topic_pref_answer(conf=0.88)",
+        "intervene": false,
+        "uai": 1.0
+      }
+    },
+    {
+      "timestamp": 490.9630477428436,
+      "role": "digest",
+      "content": "=== MNEMOS MEMORY DIGEST ===\n\n[PREFERENCE]\n  prawns_preference=like | conf=0.31 | ns=personal | Based on 1 instance \u2014 uncertain (alpha=5.0, beta=10.9)  PREFERENCE\n  prawns_preference=like | conf=0.36 | ns=personal | Based on 1 instance \u2014 uncertain (alpha=5.0, beta=8.9)  PREFERENCE\n  prawns_preference=like | conf=0.42 | ns=personal | Based on 1 instance \u2014 uncertain (alpha=5.0, beta=6.9)  PREFERENCE\n  prawns_preference=like | conf=0.51 | ns=personal | Based on 1 instance \u2014 uncertain (alpha=5.0, beta=4.9)  PREFERENCE\n  prawns_preference=like | conf=0.63 | ns=personal | Based on 1 instance \u2014 tentative  PREFERENCE\n  prawns_preference=like | conf=0.85 | ns=personal | Based on 1 instance \u2014 tentative  PREFERENCE\n\n[AUTONOMY INDEX] UAI=1.00 (healthy)\n\n[TOPIC PREFERENCES (FM-93)]\n  'statement_s_blackjack' -> prefers answer (conf=0.25, n=1)\n  'statement_s_explain_simply' -> prefers answer (conf=0.25, n=1)\n  'statement_s_like_prawns' -> prefers answer (conf=0.90, n=5)\n  'statement_s_learning_machine' -> prefers answer (conf=0.25, n=1)\n  'statement_s_explain_supervised_u' -> prefers answer (conf=0.25, n=1)\n  'statement_s_probability' -> prefers answer (conf=0.25, n=1)\n\n--- EPISTEMIC FOOTER ---\nAll beliefs carry uncertainty (Beta distribution).\nTruth-immune beliefs (FACTUAL/CONSTRAINT) always surface.\nConfidence != truth. Provenance is permanent. User is ground truth on PREFERENCE.\nFM Register: 0 entries logged.",
+      "meta": {}
+    }
+  ]
+}

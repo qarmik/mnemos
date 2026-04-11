@@ -1,26 +1,29 @@
 """
-MNEMOS-lite v0.18 — FM-120: Temporal Consistency / Hard-Write on Correction
+MNEMOS-lite v0.19 — FM-121: Belief Graph State Integrity
 
-FM-120 In-Session Preference Decay (v0.18):
-       Root cause: preference corrections acknowledged by LLM in the turn
-                   they occur but never written to the MNEMOS graph.
-                   Over 20+ turns, LLM context drifted — "I like prawns"
-                   (emphatic, short) outweighed "No, I don't" (negation,
-                   longer ago). System reported wrong state confidently.
-       Fix A: _detect_preference_correction() pattern-matches explicit
-              corrections from user input (declarative only, FM-117 gate).
-       Fix B: _hard_write_preference() writes the correction as a new
-              high-confidence PREFERENCE belief (alpha=5.0, conf≈0.85),
-              collapses prior same-topic beliefs via beta_ penalty, and
-              purges the opposite fact from synthesizer._facts and
-              long_term._session_facts. The graph holds the truth;
-              every subsequent turn's memory context carries the
-              corrected state regardless of history[] drift.
-       Fix C: context_for_session() suppresses preference-class facts
-              (prawns etc.) from cold-start injection. Identity-class
-              facts (workplace, persona, relational) always show.
-              Prevents eager memory display of irrelevant preferences
-              before the topic has arisen.
+FM-121 Belief Graph Corruption via Double Write + Self-Collapse (v0.19):
+       Root cause A (double-fire): mnemos_session.py calls ask() twice per
+                   turn — once pre-response, once for validation. Both calls
+                   ran _detect_preference_correction(), writing duplicate
+                   beliefs on every correction. 6 like-beliefs accumulated.
+       Root cause B (self-collapse): _hard_write_preference() applied beta_
+                   penalty to all same-topic beliefs including the one just
+                   written. The correction immediately weakened itself.
+       Root cause C (no dedup): add_belief() appended a new Belief object
+                   on every call rather than updating the existing one.
+                   The graph accumulated noise instead of truth.
+       Fix A: single-fire gate — _detect_preference_correction() only runs
+              when response_text == "" (first ask() call). Validation call
+              is silent.
+       Fix B: KnowledgeGraph.remove_by_trait() hard-deletes ALL prior
+              beliefs for a trait before writing the correction. No corpses,
+              no self-collapse, no soft coexistence. Truth replaces prior.
+       Fix C: KnowledgeGraph.upsert_belief() enforces one belief per
+              trait per namespace. Update in place if trait exists, else
+              insert. Graph state is always minimal and consistent.
+       Result: after "I don't like prawns", graph has exactly ONE belief:
+              prawns_preference=dislike at conf=0.85. No duplicates.
+              No degradation. No drift.
 """
 
 from __future__ import annotations
@@ -1797,6 +1800,42 @@ class KnowledgeGraph:
         self._beliefs[belief.id] = belief
         return belief.id
 
+    def remove_by_trait(self, trait: str, namespace: str = None) -> int:
+        """FM-121 (v0.19): hard-delete all beliefs matching a trait.
+
+        Used by _hard_write_preference() to eliminate prior state before
+        writing the correction. No soft coexistence — truth replaces prior.
+        Returns count of removed beliefs.
+        """
+        to_remove = [
+            bid for bid, b in self._beliefs.items()
+            if b.trait == trait
+            and (namespace is None or b.namespace == namespace)
+        ]
+        for bid in to_remove:
+            del self._beliefs[bid]
+        return len(to_remove)
+
+    def upsert_belief(self, belief: Belief) -> str:
+        """FM-121 (v0.19): update existing belief if same trait+namespace exists,
+        else insert. Enforces one belief per trait per namespace.
+        """
+        for bid, b in list(self._beliefs.items()):
+            if b.trait == belief.trait and b.namespace == belief.namespace:
+                # Update in place — preserve id, update all other fields
+                b.value          = belief.value
+                b.content        = belief.content
+                b.alpha          = belief.alpha
+                b.beta_          = belief.beta_
+                b.evidence_count = belief.evidence_count
+                b.last_confirmed = belief.last_confirmed
+                b.source_text    = belief.source_text
+                b.last_contradicted = 0.0  # fresh write, no contradiction
+                return bid
+        # No existing belief found — insert
+        self._beliefs[belief.id] = belief
+        return belief.id
+
     def quarantine(self, belief_id: str) -> None:
         if belief_id in self._beliefs:
             self._quarantine[belief_id] = self._beliefs.pop(belief_id)
@@ -2106,30 +2145,30 @@ class MnemosLite:
 
         return q
 
-    # -- FM-120: preference correction detection and hard-write ----------------
+    # -- FM-120/FM-121: preference correction detection and hard-write ----------
 
-    # Preference correction patterns: user explicitly corrects or asserts a preference
     PREF_CORRECTION_PATTERNS = [
-        # Prawns / food — explicit correction forms
-        (r"\bno[,.]?\s+i\b.{0,20}\b(?:don'?t|dislike|hate)\b.{0,20}\bprawns\b",
+        # Dislike patterns — must come BEFORE like patterns (order matters)
+        (r"\bno[,.]?\s+i\b.{0,20}\b(?:don'?t|do\s+not|dislike|hate)\b.{0,20}\bprawns\b",
          "prawns", "dislike"),
-        (r"\bactually[,.]?\s+i\b.{0,20}\b(?:don'?t|dislike|hate)\b.{0,20}\bprawns\b",
+        (r"\bactually[,.]?\s+i\b.{0,20}\b(?:don'?t|do\s+not|dislike|hate)\b.{0,20}\bprawns\b",
          "prawns", "dislike"),
-        (r"\bi\s+(?:don'?t like|dislike|hate)\s+prawns\b",
+        (r"\bi\s+(?:don'?t|do\s+not)\s+like\s+prawns\b",
          "prawns", "dislike"),
-        (r"\bi\s+(?:like|love|enjoy)\s+prawns\b",
+        (r"\bi\s+(?:dislike|hate)\s+prawns\b",
+         "prawns", "dislike"),
+        # Like patterns — only fire when NOT preceded by negation
+        # Use negative lookbehind for "not", "don't", "do not"
+        (r"\bi\s+(?:really\s+)?like\s+prawns\b(?!\s*(?:not|no))",
+         "prawns", "like"),
+        (r"\bi\s+(?:love|enjoy)\s+prawns\b",
          "prawns", "like"),
         (r"\bno[,.]?\s+i\b.{0,20}\b(?:like|love|enjoy)\b.{0,20}\bprawns\b",
          "prawns", "like"),
     ]
 
-    def _detect_preference_correction(self, text: str
-                                       ) -> Optional[Tuple[str, str]]:
-        """FM-120 (v0.18): detect explicit preference statements.
-
-        Returns (topic, value) if a clear preference correction is found,
-        else None. Only fires on declarative statements (not questions).
-        """
+    def _detect_preference_correction(self, text: str) -> Optional[Tuple[str, str]]:
+        """FM-120: detect explicit preference statements from declarative input."""
         if not SessionSynthesizer._is_declarative(text):
             return None
         text_l = text.lower().strip()
@@ -2140,55 +2179,54 @@ class MnemosLite:
 
     def _hard_write_preference(self, topic: str, value: str,
                                 namespace: str = "default") -> None:
-        """FM-120 (v0.18): write a preference correction as an authoritative
-        graph belief, superseding all prior beliefs on the same topic.
+        """FM-120/FM-121 (v0.19): authoritative preference state write.
 
-        This removes the LLM from the job of tracking preference state.
-        The graph holds the truth; every subsequent turn's memory context
-        will carry the corrected preference regardless of history[] drift.
+        Five guarantees:
+          1. Hard-deletes ALL prior beliefs for this trait (no corpses)
+          2. Writes exactly ONE new belief at high confidence (0.85)
+          3. Uses upsert_belief() to prevent accumulation
+          4. Does not touch the new belief during cleanup (no self-collapse)
+          5. Purges synthesizer/_facts and long_term of the opposite signal
         """
-        # Mark all existing same-topic beliefs as contradicted
-        for b in self.graph.all_beliefs():
-            if b.domain == Domain.PREFERENCE:
-                b_label = (b.trait or b.content or "").lower()
-                if topic.lower() in b_label:
-                    b.last_contradicted = time.time()
-                    b.beta_ = max(0.5, b.beta_ + 2.0)  # confidence collapse
+        trait = f"{topic}_preference"
 
-        # Write the correction as a new high-confidence PREFERENCE belief
-        correction_label = f"User {value}s {topic}"
-        self.add_belief(
-            content=correction_label,
-            trait=f"{topic}_preference",
+        # 1. Hard-delete all prior beliefs for this trait — no soft coexistence
+        self.graph.remove_by_trait(trait, namespace=namespace)
+
+        # 2. Write exactly one new belief at authoritative confidence
+        corrected_label = f"User {value}s {topic}"
+        b = Belief(
+            content=corrected_label,
+            trait=trait,
             value=value,
             domain=Domain.PREFERENCE,
-            ns=namespace,
-            alpha=5.0,   # 0.85 confidence: alpha/(alpha+beta) = 5/5.9
-            beta=0.9,
+            namespace=namespace,
+            alpha=5.0,
+            beta_=0.9,
+            evidence_count=1,
+            last_confirmed=time.time(),
             source_text=f"explicit correction at turn {self._turn_count}",
         )
+        # 3. Upsert — enforces one belief per trait per namespace
+        self.graph.upsert_belief(b)
 
-        # Also update synthesizer facts to reflect correction
-        facts = self.synthesizer._facts
-        # Remove any prior opposite fact about this topic
+        # 4. Purge opposite signal from synthesizer and long_term
         opposite = "likes" if value == "dislike" else "dislikes"
         self.synthesizer._facts = [
-            f for f in facts
+            f for f in self.synthesizer._facts
             if not (topic.lower() in f.lower() and opposite in f.lower())
         ]
-        # Add the corrected fact
-        corrected_fact = f"User {value}s {topic}"
-        if not any(corrected_fact.lower() in f.lower()
+        if not any(corrected_label.lower() in f.lower()
                    for f in self.synthesizer._facts):
-            self.synthesizer._facts.append(corrected_fact)
-        # Mirror to long_term
+            self.synthesizer._facts.append(corrected_label)
+
         if hasattr(self.long_term, "_session_facts"):
             self.long_term._session_facts = [
                 f for f in self.long_term._session_facts
                 if not (topic.lower() in f.lower() and opposite in f.lower())
             ]
-            if corrected_fact not in self.long_term._session_facts:
-                self.long_term._session_facts.append(corrected_fact)
+            if corrected_label not in self.long_term._session_facts:
+                self.long_term._session_facts.append(corrected_label)
 
     # -- main ask interface --------------------------------------------------
 
@@ -2202,14 +2240,14 @@ class MnemosLite:
 
         self.episodic.write("user", query, self._session_id, namespace)
 
-        # FM-120 (v0.18): detect explicit preference corrections and hard-write
-        # to graph immediately. This anchors the correction in the retrieval
-        # system so all subsequent turns serve the corrected state from the
-        # graph, not from LLM history[] which drifts over long sessions.
-        pref_correction = self._detect_preference_correction(canonical_query)
-        if pref_correction:
-            topic, value = pref_correction
-            self._hard_write_preference(topic, value, namespace)
+        # FM-120/FM-121 (v0.19): detect explicit preference corrections and
+        # hard-write to graph. Gated to first ask() call only (response_text=="")
+        # to prevent double-fire from the session runner's validation call.
+        if not response_text:
+            pref_correction = self._detect_preference_correction(canonical_query)
+            if pref_correction:
+                topic, value = pref_correction
+                self._hard_write_preference(topic, value, namespace)
 
         # FM-94/FM-110: for identity/belief queries, retrieve all beliefs across namespaces
         if is_identity_query(canonical_query) or is_belief_query(canonical_query):
