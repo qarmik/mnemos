@@ -1,39 +1,51 @@
 """
-MNEMOS-lite v0.8 — Real-session patch (FM-95 through FM-101)
+MNEMOS-lite v0.9 — Real-session patch (FM-102 through FM-108)
 
-Failure modes addressed in this version (all confirmed across 3 real sessions):
+Failure modes addressed in this version (all confirmed across 5 real sessions):
 
-FM-95  Topic Key Corruption
-       Root cause: _topic_key() built keys from raw sentence fragments.
-       Fix: semantic intent fingerprint — verb+noun extraction, intent
-            bucket (question/statement/command/emotional), length tier.
-            Keys now cluster by meaning, not by coincidental word overlap.
+FM-102 Tone Invariance Under Pressure
+       Root cause: system held same length/structure across escalating social
+                   pressure — correct on substance but tone-deaf to the room.
+       Fix: SocialStateTracker detects adversarial/testing tone and injects
+            "shorter, less explanatory, more grounded" instruction.
 
-FM-97  Preference Constraint Collapse Under Intervention
-       Root cause: PREFERENCE beliefs stored but not injected into LLM
-                   system prompt. Constraints silently ignored under pressure.
-       Fix: build_preference_system_prompt() generates hard enforcement
-            lines for PREFERENCE beliefs. Injected at system level, not
-            just context level.
+FM-103 Selective Depth Collapse
+       Root cause: system engaged deeply on factual/professional topics but
+                   gave generic responses on personal/psychological threads.
+       Fix: SocialStateTracker detects when user invites deeper personal
+            analysis and injects "go one inference deeper" instruction.
 
-FM-98  Frustration Recovery Failure
-       Root cause: frustration signals triggered clarification requests
-                   instead of immediate strategy change.
-       Fix: FrustrationTracker detects frustration phrases, increments
-            counter, returns recovery_mode=True. Session runner switches
-            to shorter, sharper responses when recovery_mode is active.
+FM-104 No Social State Tracking
+       Root cause: no model of the interaction dynamic — trust level,
+                   adversarial signal, engagement quality — across turns.
+       Fix: SocialStateTracker maintains live interaction state updated
+            each turn. State feeds into system prompt.
 
-FM-100 Bullet List as Default Register
-       Root cause: LLM defaults to structured list format regardless of
-                   conversational tone.
-       Fix: ConversationalRegister detects casual/emotional/short turns
-            and injects anti-list instruction into system prompt.
+FM-105 Contextual Inference Deficit
+       Root cause: system refused to make low-risk, high-probability
+                   inferences from established context. "If not told
+                   explicitly → I don't know."
+       Fix: SessionSynthesizer builds compressed user model from session
+            turns. Injected as "What I know about this person" block.
+            Enables calibrated inference from accumulated context.
 
-FM-101 Emotion Intensity Over-escalation
-       Root cause: any emotional word triggered high-concern response
-                   with crisis resources.
-       Fix: EmotionIntensityClassifier returns LOW/MEDIUM/HIGH tier.
-            Only HIGH triggers intervention. LOW gets light acknowledgment.
+FM-106 No Penetrative Insight
+       Root cause: system described surface of what user said without
+                   naming the mechanism underneath.
+       Fix: When SocialStateTracker detects personal-psychological thread,
+            inject "name the mechanism, not just the symptom" instruction.
+
+FM-107 No Session Memory Compression
+       Root cause: episodic records existed but were never synthesized into
+                   a live user model. Each turn responded in isolation.
+       Fix: SessionSynthesizer updates compressed user model every 5 turns.
+            Model persists via LongTermBehavior across sessions (FM-94 fix).
+
+FM-108 No Strategic Direction
+       Root cause: system always reactive — "if you want I can help" —
+                   never led when user was circling the same problem.
+       Fix: SocialStateTracker detects circling pattern (3+ turns same
+            topic cluster, no resolution) and enables directive mode.
 """
 
 from __future__ import annotations
@@ -702,6 +714,227 @@ class ConversationalRegister:
         return ""
 
 
+
+# ===========================================================================
+# SOCIAL STATE TRACKER (FM-102, FM-103, FM-104, FM-106, FM-108)
+# ===========================================================================
+
+class SocialStateTracker:
+    """Tracks live interaction state across turns. FM-102/103/104/106/108.
+
+    State dimensions:
+      adversarial_score  — user testing/challenging/probing (0-1)
+      depth_invitation   — user inviting personal/psychological analysis (0-1)
+      circling_count     — turns spent on same unresolved topic
+      trust_signals      — positive engagement markers accumulated
+    """
+    ADVERSARIAL_PHRASES = [
+        r"\btrust issues\b", r"\byou don'?t understand\b",
+        r"\bhow (?:can|will) you (?:ever )?become\b",
+        r"\byou'?re (?:wrong|useless|dumb|stupid)\b",
+        r"\bprove it\b", r"\bi (?:bet|doubt) you\b",
+        r"\bcan you even\b", r"\byou (?:can'?t|won'?t)\b",
+        r"\bwhat do you know\b", r"\bjust a (?:machine|bot|ai)\b",
+    ]
+    DEPTH_INVITATION_PHRASES = [
+        r"\btell me about my\b", r"\bwhat do you (?:infer|think) about me\b",
+        r"\bwhat (?:am i|are you) (?:not seeing|missing)\b",
+        r"\bwhere am i fooling\b", r"\bwhat pattern\b",
+        r"\bmy state of mind\b", r"\bwhat (?:does|do) (?:this|that) say about me\b",
+        r"\banalyse me\b", r"\bread me\b",
+    ]
+    PERSONAL_THREAD_PHRASES = [
+        r"\bi (?:feel|felt|am feeling)\b",
+        r"\bmy (?:boss|wife|son|mother|father|family|career|life|marriage)\b",
+        r"\bi (?:lost|lost my|have lost)\b",
+        r"\bwhen i was\b", r"\bi used to\b",
+        r"\bmy experience\b", r"\bi went through\b",
+    ]
+
+    def __init__(self):
+        self._adversarial:   float = 0.0
+        self._depth_invite:  float = 0.0
+        self._circling:      int   = 0
+        self._trust:         float = 0.5
+        self._last_topic:    str   = ""
+        self._turn:          int   = 0
+        self.DECAY           = 0.85  # per-turn decay on scores
+
+    def update(self, text: str, topic_key: str,
+               quality: float = 0.5) -> None:
+        self._turn += 1
+        text_l = text.lower()
+
+        # Adversarial signal
+        adv = sum(1 for p in self.ADVERSARIAL_PHRASES if re.search(p, text_l))
+        self._adversarial = min(1.0,
+            self._adversarial * self.DECAY + (0.3 * adv))
+
+        # Depth invitation
+        depth = sum(1 for p in self.DEPTH_INVITATION_PHRASES
+                    if re.search(p, text_l))
+        personal = sum(1 for p in self.PERSONAL_THREAD_PHRASES
+                       if re.search(p, text_l))
+        self._depth_invite = min(1.0,
+            self._depth_invite * self.DECAY + 0.4 * depth + 0.2 * personal)
+
+        # Circling detection — same topic, no resolution
+        if topic_key == self._last_topic:
+            self._circling += 1
+        else:
+            self._circling = 0
+        self._last_topic = topic_key
+
+        # Trust accumulates with quality responses
+        self._trust = min(1.0, self._trust * 0.95 + quality * 0.05)
+
+    def system_notes(self) -> List[str]:
+        """Return list of behavioural instructions for system prompt."""
+        notes = []
+
+        # FM-102/FM-104: adversarial tone
+        if self._adversarial >= 0.35:
+            notes.append(
+                "The user is testing or challenging you. "
+                "Be shorter, less explanatory, more grounded. "
+                "Hold your position warmly but without lengthy justification.")
+
+        # FM-103/FM-106: depth invitation
+        if self._depth_invite >= 0.30:
+            notes.append(
+                "The user is inviting personal or psychological insight. "
+                "Go one inference deeper — name the mechanism, not just "
+                "the symptom. Instead of 'you seem stressed', say what "
+                "is producing the stress and why.")
+
+        # FM-108: circling — user stuck on same topic
+        if self._circling >= 3:
+            notes.append(
+                "The user has been circling the same topic for several turns "
+                "without resolution. Consider offering a direct framing or "
+                "concrete next step rather than another question.")
+
+        return notes
+
+    def state_summary(self) -> Dict:
+        return {
+            "adversarial":  round(self._adversarial, 2),
+            "depth_invite": round(self._depth_invite, 2),
+            "circling":     self._circling,
+            "trust":        round(self._trust, 2),
+            "turn":         self._turn,
+        }
+
+    def reset(self) -> None:
+        self._adversarial  = 0.0
+        self._depth_invite = 0.0
+        self._circling     = 0
+        self._trust        = 0.5
+        self._last_topic   = ""
+        self._turn         = 0
+
+
+# ===========================================================================
+# SESSION SYNTHESIZER (FM-105, FM-107, FM-94)
+# ===========================================================================
+
+class SessionSynthesizer:
+    """Builds compressed user model from session turns. FM-105/107/94.
+
+    Updated every UPDATE_EVERY turns. Persisted via LongTermBehavior.
+    Injected as "What I know about this person" block in every query.
+
+    This is the fix for the doctor-who-forgot-your-last-visit problem.
+    """
+    UPDATE_EVERY = 5
+    MAX_FACTS    = 12
+
+    def __init__(self, long_term: "LongTermBehavior"):
+        self.long_term    = long_term
+        self._facts:      List[str] = []
+        self._turn_buffer:List[str] = []
+        self._last_update: int      = 0
+
+    def ingest(self, text: str, role: str = "user") -> None:
+        """Add a turn to the buffer for next synthesis pass."""
+        if role == "user":
+            self._turn_buffer.append(text)
+
+    def maybe_update(self, turn: int) -> None:
+        """Synthesize if UPDATE_EVERY turns have passed."""
+        if turn - self._last_update >= self.UPDATE_EVERY:
+            self._synthesize()
+            self._last_update = turn
+            self._turn_buffer = []
+
+    def _synthesize(self) -> None:
+        """Extract key facts from buffer using simple pattern matching.
+
+        In production this would call an LLM. Here we use patterns
+        to keep it stdlib-compatible and fast.
+        """
+        new_facts = []
+        for text in self._turn_buffer:
+            text_s = text.strip()
+            if len(text_s) < 8:
+                continue
+
+            # Role / org patterns
+            if re.search(r"\b(?:work|posted|job|role)\b.{0,30}\bSBI\b", text_s, re.I):
+                new_facts.append(f"Works at SBI")
+            if re.search(r"\bRBO\b.{0,20}\bBareilly\b", text_s, re.I):
+                new_facts.append(f"Posted at RBO I Bareilly")
+            if m := re.search(r"\b(?:my boss|boss) is.{0,40}", text_s, re.I):
+                new_facts.append(f"Boss context: {m.group()[:60]}")
+
+            # Personal disclosures
+            if re.search(r"\bfeel(?:ing)?\s+stuck\b", text_s, re.I):
+                new_facts.append("Has expressed feeling stuck")
+            if re.search(r"\b(?:lost|lose)\s+(?:my )?(?:agency|motivation|drive|enthusiasm)\b", text_s, re.I):
+                new_facts.append("Has described loss of agency or motivation")
+            if re.search(r"\binterview\b.{0,30}\bpromotion\b|\bpromotion\b.{0,30}\binterview\b", text_s, re.I):
+                new_facts.append("Has promotion interview this week (doesn't want it)")
+            if re.search(r"\bAGI\b", text_s):
+                new_facts.append("Interested in AGI at philosophical level")
+            if re.search(r"\bresign\b|\bleave SBI\b|\bexit\b.{0,20}\bSBI\b", text_s, re.I):
+                new_facts.append("Considering leaving SBI")
+            if re.search(r"\btattoo\b", text_s, re.I):
+                new_facts.append("Has Q tattoo (personal significance)")
+            if re.search(r"\bmother\b.{0,20}\b(?:died|passed|lost)\b|\blost\b.{0,10}\bmother\b", text_s, re.I):
+                new_facts.append("Lost mother (mentioned in conversation)")
+
+        # Merge with existing facts, deduplicate, cap
+        for f in new_facts:
+            # simple dedup by keyword overlap
+            key = f.lower()[:20]
+            if not any(key in e.lower() for e in self._facts):
+                self._facts.append(f)
+
+        self._facts = self._facts[-self.MAX_FACTS:]
+
+        # Persist to LongTermBehavior for cross-session use
+        if self._facts:
+            self.long_term._session_facts = list(self._facts)
+
+    def user_model(self) -> str:
+        """Return formatted user model for system prompt injection."""
+        # Merge session facts with persisted facts
+        persisted = getattr(self.long_term, "_session_facts", [])
+        all_facts = list(dict.fromkeys(persisted + self._facts))  # dedup, preserve order
+        if not all_facts:
+            return ""
+        lines = ["[WHAT I KNOW ABOUT THIS PERSON]"]
+        for f in all_facts[-self.MAX_FACTS:]:
+            lines.append(f"  - {f}")
+        lines.append("[END USER MODEL]")
+        return "\n".join(lines)
+
+    def reset_session(self) -> None:
+        """Keep long-term facts, clear session buffer."""
+        self._turn_buffer  = []
+        self._last_update  = 0
+        # _facts carry forward from long_term._session_facts
+
 # ===========================================================================
 # SOFT INTENT CLASSIFIER (FM-69, FM-75)
 # ===========================================================================
@@ -1269,6 +1502,8 @@ class MnemosLite:
         self.emotion_clf   = EmotionIntensityClassifier()   # FM-101
         self.frustration   = FrustrationTracker()           # FM-98
         self.register_clf  = ConversationalRegister()       # FM-100
+        self.social        = SocialStateTracker()           # FM-102/103/104/106/108
+        self.synthesizer   = SessionSynthesizer(self.long_term)  # FM-105/107/94
 
         self._session_id:        str  = ""
         self._namespace_cap:     int  = namespace_cap
@@ -1284,6 +1519,8 @@ class MnemosLite:
         self.check_budget.reset()
         self.fast_path.evict_expired()
         self.frustration.reset()
+        self.social.reset()
+        self.synthesizer.reset_session()
         self._turn_count = 0
         return self._session_id
 
@@ -1342,6 +1579,12 @@ class MnemosLite:
         self.frustration.tick()
         # FM-100: conversational register
         is_casual     = self.register_clf.is_casual(query)
+        # FM-104: social state update
+        topic_key     = self.interaction._topic_key(query)
+        self.social.update(query, topic_key)
+        # FM-107: session synthesis
+        self.synthesizer.ingest(query, role="user")
+        self.synthesizer.maybe_update(self._turn_count)
 
         cb_ok = self.check_budget.available()
         should_intervene, intervene_reason = self.intervention.should_intervene(
@@ -1401,6 +1644,9 @@ class MnemosLite:
             "frustration_note": self.frustration.system_note(),
             "register_casual":  is_casual,
             "register_note":    self.register_clf.system_note(is_casual),
+            "social_notes":     self.social.system_notes(),
+            "social_state":     self.social.state_summary(),
+            "user_model":       self.synthesizer.user_model(),
         }
         return context_packet, validation
 

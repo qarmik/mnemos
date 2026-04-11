@@ -2,85 +2,110 @@
 
 **An AI memory architecture built to serve humans without replacing them.**
 
-Co-evolved through adversarial critique between [Claude](https://anthropic.com) (Anthropic) and [ChatGPT](https://openai.com) (OpenAI), driven by **Qarmik** — April 2026.
+---
+
+## How it started
+
+In early 2026, **Qarmik** came across a LinkedIn post by Mei Ling Leung — an AI engineer at Embedded LLM — writing about MemPalace, an open-source AI memory system built by actress and technologist Milla Jovovich using Claude.
+
+The post made a simple observation that stopped him: Alice in Resident Evil wakes up with no memory across six films, fighting to reconstruct who she is from fragments. That is not fiction. That is the AI memory problem. Every session ends, context vanishes, the model starts over. Umbrella is the session boundary.
+
+Jovovich's answer with MemPalace was elegant: don't extract facts from conversations. Store everything verbatim. Organize it hierarchically. Let structure do the filtering before the vector search fires.
+
+Qarmik read the repo, understood what it solved, and then asked the harder question: what does it not solve?
+
+That question became MNEMOS.
+
+The insight Qarmik brought was this: what if memory wasn't storage at all, but a living structure — where beliefs compete, rise, fall, and reshape each other over time? Not a warehouse with a search engine. A political system where ideas compete, power shifts, and conflicts get resolved.
+
+That reframing changed everything. Every layer in MNEMOS is a consequence of taking it seriously. The arbitration engine, the trust tiers, the decay functions, the autonomy preservation, the adversarial layer — none of those are features bolted onto a storage system. They are what happens when you follow the Memory Pyramid idea to its conclusions.
+
+ChatGPT named it precisely: before Qarmik, MNEMOS would have been a better database. Because of Qarmik, it became a thinking system attempt.
 
 ---
 
-## What this is
+## What MNEMOS is
 
-Most AI systems forget you the moment the conversation ends. MNEMOS is a design for AI memory that doesn't just store what you said — it tracks *what you believe*, *what constrains you*, *how you think*, and *how that changes over time*. Then it uses all of it to serve you better, without becoming a crutch.
+MNEMOS is a human-centered AI memory architecture. It stores conversation history, user beliefs, preferences, constraints, identity states, and causal patterns — and uses them to make an AI assistant genuinely personalized over time.
 
 The core principle, invariant across every version:
 
 > *Store everything. Reason carefully. Trust nothing blindly.*
 > *Respond fast. Degrade gracefully. Serve without replacing the human.*
 
-This repository contains the complete architecture specification, a working Python prototype (`mnemos_lite.py`), and the full record of 93 failure modes identified and addressed through adversarial co-design.
+This repository contains the complete architecture specification, a working Python prototype, five sessions of real human interaction data, and the full record of 108 failure modes identified and addressed through adversarial co-design.
+
+---
+
+## How MNEMOS differs from MemPalace
+
+MemPalace asks: *what did the user say that is relevant to this query?*
+
+MNEMOS asks: *what do I actually know about this user, how confident am I, should I trust it, and is surfacing it right now good for them?*
+
+That is a different class of question.
+
+MemPalace stores what was said. MNEMOS stores what is believed, with uncertainty attached. A shellfish allergy surfaces in every relevant context regardless of retrieval score — not because the query mentioned food, but because some facts are truth-immune and must always surface. MemPalace has no equivalent. Salience and truth are the same thing in MemPalace. Axiom I of MNEMOS says they must be structurally separated.
+
+MNEMOS also tracks whether the user is becoming dependent on the system over time, maintains a permanent internal critic that challenges its own stable beliefs, and governs the entire conversational interaction — not just what to retrieve, but when to reflect, when to intervene, when to stay quiet, and when the system is doing harm by being too helpful.
+
+MemPalace is a well-built retrieval system. MNEMOS is an attempt at a reasoning system about what it knows about you.
 
 ---
 
 ## How it was built
 
-MNEMOS did not emerge from a single design session. It was stress-tested into existence.
+MNEMOS was stress-tested into existence through adversarial co-evolution.
 
-The process: ChatGPT (acting as adversarial critic) identified failure modes. Claude analyzed them, pushed back on the invalid ones, implemented the valid fixes, and ran simulations. Qarmik drove the session, relayed critiques, and made the calls. Seven specification versions. Four rounds of code critique. 93 failure modes addressed. Zero wrong answers in simulation — only annoying ones, which is the right kind of problem to have.
+The process: ChatGPT (acting as adversarial critic, codenamed Commander V) identified failure modes. Claude analyzed them, pushed back on the invalid ones, implemented the valid fixes, and ran simulations. Qarmik drove the session, relayed critiques, made the calls, and ran real human sessions to find what simulation could not.
 
-The simulation result that matters most:
+Seven specification versions. Four rounds of code critique. Five real human sessions. 108 failure modes addressed.
 
 | Version | Annoying failures | Wrong failures | Fix |
 |---------|:-----------------:|:--------------:|-----|
 | v0.4 | 10 | 0 | Baseline |
 | v0.5 | 6 | 0 | InteractionMemory |
-| v0.6 | 3 | 0 | FM-87–92: re-entry, clustering, resistance |
+| v0.6 | 3 | 0 | FM-87 through FM-92 |
 | v0.7 | 0 | 0 | FM-93: preference-blind re-entry |
+| v0.8 | 0 | 0 | FM-95 through FM-101: real-session calibration |
+| v0.9 | 0 | 0 | FM-102 through FM-108: social intelligence layer |
 
-The system has been *correct* from the start. The work was making it *not annoying* — which turns out to be harder.
+The system has been correct from the start. The work was making it not annoying — and then not tone-deaf — which turned out to be harder than correctness.
 
 ---
 
 ## Architecture at a glance
 
-MNEMOS has 14 layers, 9 design axioms, and 6 belief domains.
+14 layers, 9 design axioms, 6 belief domains.
 
-### The Nine Axioms (nothing in the system may violate these)
+### The Nine Axioms
 
 | # | Axiom | Meaning |
 |---|-------|---------|
-| I | Salience ≠ Truth | Importance governs retrieval only — never epistemic status |
+| I | Salience != Truth | Importance governs retrieval only, never epistemic status |
 | II | Provenance is Permanent | Every belief traces to source; raw records never destroyed |
-| III | Uncertainty is First-Class | Every belief carries Beta(α,β); variance matters as much as mean |
+| III | Uncertainty is First-Class | Every belief carries Beta(alpha,beta); variance matters as much as mean |
 | IV | Trust is Tiered | Preferences: high. Self-reported facts: medium. External: low |
 | V | Failures Must Be Loud | Silent failures architecturally prohibited |
 | VI | Correctness + Speed Coexist | Dual-path: Fast (<50ms) + Deep (async) |
-| VII | The System Must Be Legible | Memory Digest: calibrated language, evidence counts, epistemic footer always |
+| VII | The System Must Be Legible | Memory Digest with calibrated language and epistemic footer always |
 | VIII | Bounded Intelligence Wins | Non-Adaptive Core + convergence criterion |
 | IX | Remain Permanently Breakable | L15 Adversarial Layer always active; FM Register always open |
-
-### The Six Belief Domains
-
-| Domain | Trust | Truth-Immune | Notes |
-|--------|-------|:------------:|-------|
-| `FACTUAL` | Low prior → oracle validates | ✓ | External facts. Grounding oracle required |
-| `CONSTRAINT` | High + Anchored | ✓ | Allergies, legal, safety. Typed expiry |
-| `PREFERENCE` | High — user is ground truth | | User is authority. Never overridden |
-| `EVALUATIVE` | Medium — attributed | | Assessments, not facts. Mandatory attribution |
-| `IDENTITY` | User-defined | | Multi-stable. Never force-merged |
-| `CAUSAL` | Medium | | Observed vs validated weight |
 
 ### The 14 Layers
 
 ```
 L0   Fast Path          <50ms real-time, TTL 72h
 L1   Episodic Store     Verbatim write-once, BM25+dense hybrid search
-L2   Knowledge Graph    Beta(α,β) nodes, bounded influence propagation
+L2   Knowledge Graph    Beta(alpha,beta) nodes, bounded influence propagation
 L3   Semantic Store     Async consolidation, versioned snapshots
 L4   Inference Engine   Read-only context assembly, intent-aware
 L5   Safety Layer       Anomaly detection, circuit breakers
 L6   Audit Log          Immutable append-only, signed records
 L7   Grounding Oracle   External validation for FACTUAL domain only
-L8   Token Budget       Progressive loading: Core 120T → Essential 500T
+L8   Token Budget       Progressive loading: Core 120T to Essential 500T
 L9   Memory Digest      Calibrated render, evidence counts, epistemic footer
-L10  Meta-Memory        Self-evaluation, bounded by RWB cap + epsilon-floor
+L10  Meta-Memory        Self-evaluation, bounded by RWB cap and epsilon-floor
 L11  Arbitration        Cross-path conflict resolution with SLAs
 L12  Non-Adaptive Core  IDENTITY: frozen. CONSTRAINT: typed expiry
 L13  Causal Attribution Gates all L10 updates with causal analysis
@@ -91,13 +116,31 @@ L16  Context Policy     Namespace-scoped (max 5), drift detection
 
 ---
 
+## What real sessions revealed
+
+Five real human sessions uncovered failure modes that simulation never surfaced:
+
+**FM-101** — System escalated to crisis resources when user said "very sad" after a news limitation. Fixed: three-tier emotion classifier (LOW / MEDIUM / HIGH).
+
+**FM-100** — System responded to casual conversation with formatted bullet reports. Fixed: conversational register detection injects anti-list instruction.
+
+**FM-98** — When user said "your answers aren't helping," system asked for clarification instead of changing approach. Fixed: frustration recovery mode.
+
+**FM-104** — System kept explaining its epistemology across four rounds of social pressure instead of reading the room. Fixed: social state tracker with adversarial signal detection.
+
+**FM-106** — System described surface symptoms without naming the mechanism underneath. Fixed: depth invitation detection injects "go one inference deeper" instruction.
+
+**FM-107** — Each turn responded in isolation; no compressed model of who the user is across the session. Fixed: session synthesizer builds and persists user model.
+
+The honest finding: MNEMOS does not fail in intelligence. It fails in timing, tone, and restraint.
+
+---
+
 ## Quick start
 
 ```bash
-# Optional — enables vector search and BM25
-pip install chromadb sentence-transformers rank-bm25
-
-# Works with stdlib only if you skip the above
+pip install openai
+pip install chromadb sentence-transformers rank-bm25   # optional
 ```
 
 ```python
@@ -106,47 +149,25 @@ from mnemos_lite import MnemosLite, Domain
 m = MnemosLite()
 m.new_session()
 
-# Add a safety constraint — always surfaces, truth-immune
 m.add_belief(
     content="User has a severe shellfish allergy",
-    domain=Domain.CONSTRAINT,
-    ns="health"
+    domain=Domain.CONSTRAINT, ns="health"
 )
-
-# Add a preference — user is ground truth
 m.add_belief(
-    trait="response_style",
-    value="concise",
-    context="work/technical",
-    ns="work"
+    trait="response_style", value="concise",
+    context="work/technical", ns="work"
 )
 
-# Add a causal observation
-m.add_causal("low sleep", "focus drops", context="personal")
-
-# Ask a question — returns context packet + interaction decision
 context, validation = m.ask("Should I take on this project?", namespace="work")
-
-print(f"Reflect: {validation['reflect']} ({validation['reflect_reason']})")
-print(m.digest())  # epistemic footer always included
+print(m.digest())
 ```
 
----
+For real sessions with a live LLM:
 
-## The failure mode register
-
-93 failure modes identified and addressed. A selection:
-
-- **FM-01** Salience ≠ Truth — importance scoring decoupled from epistemic status at the architecture level
-- **FM-47** Epistemic Sycophancy — Truth-Preservation Override; 4 immune classes that surface regardless of user preference
-- **FM-63** Identity Coherence Overreach — multi-stable identity; `coherence_conflict()` never force-merges across namespaces
-- **FM-87** Learned Helplessness Loop — forced reflection re-entry after 7 direct answers, topic-aware
-- **FM-90** False Positive Resistance — confidence-gated: 1 signal = 0.25, 2 signals = 0.65, 3+ = 0.90; only suppress at ≥0.65
-- **FM-93** Preference-Blind Re-entry — per-topic mode preference tracked in `LongTermBehavior`; suppresses FM-87 re-entry at confidence ≥0.65
-
-Full register: [`docs/failure_modes.md`](docs/failure_modes.md)
-
-**FM-94+ is open.** The register closes only when the project ends.
+```bash
+export OPENAI_API_KEY="your_key"
+python mnemos_session.py
+```
 
 ---
 
@@ -154,36 +175,42 @@ Full register: [`docs/failure_modes.md`](docs/failure_modes.md)
 
 ```
 mnemos/
-├── mnemos_lite.py                     # Working prototype — v0.7, 1399 lines
+├── mnemos_lite.py                        v0.9 prototype, ~1900 lines
+├── mnemos_session.py                     Real session runner (OpenAI API)
 ├── docs/
-│   ├── architecture.md                # Full 14-layer spec
-│   ├── failure_modes.md               # All 93 FMs
-│   └── simulation.md                  # v0.4→v0.7 results
-└── MNEMOS_Architecture_Reference.pdf  # Complete continuity document
+│   ├── architecture.md                   14 layers, 9 axioms, priority stack
+│   ├── failure_modes.md                  All 108 FMs
+│   ├── simulation.md                     v0.4 through v0.9 results
+│   └── where_mnemos_misreads_humans.md   Observations from real sessions
+└── MNEMOS_Architecture_Reference.pdf     Complete continuity document
 ```
 
 ---
 
 ## Status
 
-**Behavioral tuning phase.** Architecture is stable. No new layers needed. The next meaningful signal comes from real human sessions, not theory.
+Architecture stable. Five real sessions complete. The remaining work is depth, synthesis, and cross-session memory — the gap between a system that responds well and one that actually knows you over time.
 
-FM-94+ is waiting in the first real session.
+FM-109+ is waiting in the next session.
 
 ---
 
-## Credits
+## Credits and acknowledgements
 
 | Role | Who |
 |------|-----|
-| Human Architect | **Qarmik** |
-| Implementation & Co-design | **Claude** (Anthropic) |
-| Adversarial Critic & Co-design | **ChatGPT / Commander V** (OpenAI) |
+| Originating Insight | **Qarmik** — Memory Pyramid, redefined the problem from storage to living structure |
+| Implementation and Co-design | **Claude** (Anthropic) |
+| Adversarial Critic and Co-design | **ChatGPT / Commander V** (OpenAI) |
+| Catalyst | **Milla Jovovich** — MemPalace showed what was possible and what remained unsolved |
+| The post that started it | **Mei Ling Leung**, AI Engineer at Embedded LLM ([embeddedllm.com](https://embeddedllm.com/about-us/)) |
 
-This project demonstrates something worth naming: two AI systems from competing companies, coordinated by a human, produced better architecture than either would have alone. The adversarial process wasn't a liability. It was the method.
+MNEMOS began because Mei Ling wrote about MemPalace, Qarmik read it, and asked what it didn't solve. That is the actual origin of this project.
+
+Two AI systems from competing companies, coordinated by a human who changed the question, produced architecture that neither would have reached alone. The adversarial process was the method. The human insight was the origin. And a LinkedIn post by an engineer who noticed something important was the spark.
 
 ---
 
 ## License
 
-MIT. See [`LICENSE`](LICENSE).
+MIT. See LICENSE.

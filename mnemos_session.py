@@ -127,7 +127,16 @@ def build_memory_context(context_packet: dict, validation: dict) -> str:
     if register_note:
         lines.append(f"Format signal: {register_note}")
 
+    # FM-102/103/104/106/108: social state instructions
+    for note in validation.get("social_notes", []):
+        lines.append(f"Interaction signal: {note}")
+
     lines.append("[END MEMORY CONTEXT]\n")
+
+    # FM-105/107: user model (injected before memory context)
+    user_model = validation.get("user_model", "")
+    if user_model:
+        return user_model + "\n\n" + "\n".join(lines)
     return "\n".join(lines)
 
 
