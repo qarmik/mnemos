@@ -1,94 +1,26 @@
 """
-MNEMOS-lite v0.16 — FM-118: Evaluative Fact Blindness + decay control + UAI fix
+MNEMOS-lite v0.18 — FM-120: Temporal Consistency / Hard-Write on Correction
 
-FM-118 Evaluative Fact Blindness (v0.16):
-       Root cause: synthesizer captured identity facts and preferences but
-                   not relational evaluations. "He is an asshole" handled
-                   well in session but never stored. Next session: amnesia.
-       Fix: _synthesize() captures strong evaluative language about named
-            roles (boss, manager, partner) as [relational] facts at 0.40
-            confidence — explicitly user perception, not objective truth.
-
-Decay rate control (v0.16):
-       Fix: SLOW_DECAY_PREFIXES halves decay rate (0.05/session) for
-            identity-core and relational facts. Session persona signals
-            decay at normal 0.10.
-
-UAI minimum sample fix (v0.16):
-       Fix: session_uai() requires len(session_natural) >= 3 before
-            applying delta penalty. Sparse sessions use nat average.
-
-MNEMOS-lite v0.14 — FM-116 Cross-Session Read Failure fix
-
-FM-116 Cross-Session Read Failure (v0.14):
-       Root cause A: user_profile.json was empty for Sessions 1-8 because
-                   save_session() / PersistentProfile only went live in v0.12.
-                   Session 9 was the first write. Nothing to read back.
-       Root cause B: SessionSynthesizer._synthesize() only ran every 5 turns.
-                   Facts disclosed in turns 1-4 (e.g. "I hate prawns" at
-                   turn 2) were in _turn_buffer but not yet in _facts when
-                   save_session() ran. They were never written to disk.
-       Root cause C: new_session() read self.profile._data from the __init__
-                   snapshot. If a prior process had written the profile,
-                   the in-memory snapshot was stale.
-       Fix A: SessionSynthesizer.ingest() now calls _capture_immediate() on
-              every user turn. High-value preference/identity patterns are
-              written to _facts and long_term._session_facts right away,
-              not deferred to the 5-turn synthesis window.
-       Fix B: save_session() forces a final _synthesize() pass before
-              collecting facts, catching anything in the buffer that
-              didn't hit the UPDATE_EVERY threshold.
-       Fix C: new_session() calls self.profile._load() to re-read from
-              disk, guaranteeing fresh state regardless of when __init__
-              ran.
-
-MNEMOS-lite v0.13 — Real-session patch (FM-102 through FM-108)
-
-Failure modes addressed in this version (all confirmed across 5 real sessions):
-
-FM-102 Tone Invariance Under Pressure
-       Root cause: system held same length/structure across escalating social
-                   pressure — correct on substance but tone-deaf to the room.
-       Fix: SocialStateTracker detects adversarial/testing tone and injects
-            "shorter, less explanatory, more grounded" instruction.
-
-FM-103 Selective Depth Collapse
-       Root cause: system engaged deeply on factual/professional topics but
-                   gave generic responses on personal/psychological threads.
-       Fix: SocialStateTracker detects when user invites deeper personal
-            analysis and injects "go one inference deeper" instruction.
-
-FM-104 No Social State Tracking
-       Root cause: no model of the interaction dynamic — trust level,
-                   adversarial signal, engagement quality — across turns.
-       Fix: SocialStateTracker maintains live interaction state updated
-            each turn. State feeds into system prompt.
-
-FM-105 Contextual Inference Deficit
-       Root cause: system refused to make low-risk, high-probability
-                   inferences from established context. "If not told
-                   explicitly → I don't know."
-       Fix: SessionSynthesizer builds compressed user model from session
-            turns. Injected as "What I know about this person" block.
-            Enables calibrated inference from accumulated context.
-
-FM-106 No Penetrative Insight
-       Root cause: system described surface of what user said without
-                   naming the mechanism underneath.
-       Fix: When SocialStateTracker detects personal-psychological thread,
-            inject "name the mechanism, not just the symptom" instruction.
-
-FM-107 No Session Memory Compression
-       Root cause: episodic records existed but were never synthesized into
-                   a live user model. Each turn responded in isolation.
-       Fix: SessionSynthesizer updates compressed user model every 5 turns.
-            Model persists via LongTermBehavior across sessions (FM-94 fix).
-
-FM-108 No Strategic Direction
-       Root cause: system always reactive — "if you want I can help" —
-                   never led when user was circling the same problem.
-       Fix: SocialStateTracker detects circling pattern (3+ turns same
-            topic cluster, no resolution) and enables directive mode.
+FM-120 In-Session Preference Decay (v0.18):
+       Root cause: preference corrections acknowledged by LLM in the turn
+                   they occur but never written to the MNEMOS graph.
+                   Over 20+ turns, LLM context drifted — "I like prawns"
+                   (emphatic, short) outweighed "No, I don't" (negation,
+                   longer ago). System reported wrong state confidently.
+       Fix A: _detect_preference_correction() pattern-matches explicit
+              corrections from user input (declarative only, FM-117 gate).
+       Fix B: _hard_write_preference() writes the correction as a new
+              high-confidence PREFERENCE belief (alpha=5.0, conf≈0.85),
+              collapses prior same-topic beliefs via beta_ penalty, and
+              purges the opposite fact from synthesizer._facts and
+              long_term._session_facts. The graph holds the truth;
+              every subsequent turn's memory context carries the
+              corrected state regardless of history[] drift.
+       Fix C: context_for_session() suppresses preference-class facts
+              (prawns etc.) from cold-start injection. Identity-class
+              facts (workplace, persona, relational) always show.
+              Prevents eager memory display of irrelevant preferences
+              before the topic has arisen.
 """
 
 from __future__ import annotations
@@ -585,9 +517,9 @@ class AutonomyTracker:
         nat = sum(self._session_natural) / len(self._session_natural)
         if not self._session_prompted:
             return nat
-        # v0.16: require at least 3 natural interactions before delta is
-        # trusted. A single capability-redirect exchange shouldn't crater
-        # UAI when the rest of the session was healthy.
+        # v0.16: require at least 3 natural interactions before delta is trusted.
+        # A single capability-redirect exchange shouldn't crater UAI when the
+        # rest of the session was healthy.
         if len(self._session_natural) < 3:
             return max(self.UAI_FLOOR, nat)
         delta = sum(self._session_prompted)/len(self._session_prompted) - nat
@@ -934,12 +866,30 @@ class SessionSynthesizer:
         self._turn_buffer.append(text)
         self._capture_immediate(text)
 
+    @staticmethod
+    def _is_declarative(text: str) -> bool:
+        """FM-117 gate: only capture facts from declarative statements, never questions."""
+        t = text.strip().lower()
+        if t.endswith("?"):
+            return False
+        if re.match(r"^(do |does |did |is |are |was |were |have |has |had |"
+                    r"what |who |where |when |why |how |can |could |would |"
+                    r"should |will |shall )", t):
+            return False
+        return True
+
     def _capture_immediate(self, text: str) -> None:
-        """Extract high-value facts right now, without waiting for synthesis."""
+        """Extract high-value facts right now, without waiting for synthesis.
+
+        FM-117 fix: guarded by _is_declarative() — only assertions, never questions.
+        """
+        if not self._is_declarative(text):
+            return
+
         text_s = text.strip()
         new_facts = []
 
-        # Food/preference dislikes — covers prawns and generic hate patterns
+        # Food/preference dislikes
         if re.search(r"\bdon'?t like prawns\b|\bhate prawns\b|\bdislike prawns\b", text_s, re.I):
             new_facts.append("User dislikes prawns")
         elif re.search(r"\blike prawns\b|\blove prawns\b|\benjoy prawns\b", text_s, re.I):
@@ -956,7 +906,6 @@ class SessionSynthesizer:
             if not any(key in e.lower() for e in self._facts):
                 self._facts.append(fact)
 
-        # Persist immediately to long_term so save_session() can always find them
         if new_facts and hasattr(self.long_term, "_session_facts"):
             for f in new_facts:
                 if f not in self.long_term._session_facts:
@@ -1011,17 +960,27 @@ class SessionSynthesizer:
             if re.search(r"\bdon'?t like prawns\b|\bhate prawns\b", text_s, re.I):
                 new_facts.append("User dislikes prawns")
 
-            # FM-118: relational evaluation capture — user perceptions of people
-            # in their life. Stored at low confidence (user perception, not fact).
-            # Patterns match strong evaluative language about named roles.
-            if re.search(r"\b(?:my boss|my manager|my supervisor)\b.{0,60}\b(?:asshole|terrible|awful|toxic|horrible|difficult|unpredictable|bully|useless|incompetent)\b", text_s, re.I):
-                new_facts.append("[relational] Boss: perceived as difficult/toxic (low confidence — user perception)")
-            elif re.search(r"\b(?:my boss|my manager|my supervisor)\b.{0,60}\b(?:good|great|supportive|helpful|fair|decent|excellent)\b", text_s, re.I):
-                new_facts.append("[relational] Boss: perceived positively (low confidence — user perception)")
-            if re.search(r"\b(?:my wife|my husband|my partner|my spouse)\b.{0,60}\b(?:always|never|usually|keeps|loves|hates)\b", text_s, re.I):
-                if m_rel := re.search(r"\b(?:my wife|my husband|my partner|my spouse)\b.{0,60}", text_s, re.I):
-                    snippet = m_rel.group()[:80].strip()
-                    new_facts.append(f"[relational] Partner pattern: {snippet} (low confidence — user perception)")
+            # FM-118 (v0.16): relational evaluation capture — user perceptions
+            # of people in their life. Low confidence, marked as user perception.
+            if re.search(r"\b(?:my boss|my manager|my supervisor)\b.{0,60}"
+                         r"\b(?:asshole|terrible|awful|toxic|horrible|difficult|"
+                         r"unpredictable|bully|useless|incompetent)\b", text_s, re.I):
+                new_facts.append("[relational] Boss: perceived as difficult/toxic "
+                                 "(low confidence — user perception)")
+            elif re.search(r"\b(?:my boss|my manager|my supervisor)\b.{0,60}"
+                           r"\b(?:good|great|supportive|helpful|fair|decent|excellent)\b",
+                           text_s, re.I):
+                new_facts.append("[relational] Boss: perceived positively "
+                                 "(low confidence — user perception)")
+            # Partner behavioral patterns — recurring, not one-time events
+            if re.search(r"\bmy (?:wife|husband|partner|spouse)\b.{0,50}"
+                         r"\b(?:always|never|usually|often|keeps|loves|hates|"
+                         r"cook|make|prepare)\b", text_s, re.I):
+                if m_p := re.search(r"\bmy (?:wife|husband|partner|spouse)\b.{0,70}",
+                                    text_s, re.I):
+                    snippet = m_p.group()[:80].strip()
+                    new_facts.append(f"[relational] Partner pattern: {snippet} "
+                                     f"(low confidence — user perception)")
 
             # FM-111: implicit fact extraction from contextual/persona language
             if re.search(r"\bfortress\b.{0,20}\bSBI\b|\bescape\b.{0,20}\bSBI\b|\bfree\b.{0,20}\bSBI\b", text_s, re.I):
@@ -1098,6 +1057,10 @@ BELIEF_QUERY_PATTERNS = [
     r"\bdo i have\b",
     r"\bwhat is my\b",
     r"\bwhat are my\b",
+    # FM-119: after canonicalization "Does Cadet Q0 like X?" → "Does you like X?"
+    # "does you" is grammatically wrong but is the correct canonicalized form
+    r"\bdoes you (?:believe|think|feel|like|hate|love|want|prefer|have)\b",
+    r"\bdo you (?:like|hate|love|prefer|want|believe|think|feel)\b",  # "do you like"
 ]
 
 def is_identity_query(text: str) -> bool:
@@ -1432,20 +1395,53 @@ class PersistentProfile:
             return False
         return any(fact.startswith(p) for p in self.PERSISTABLE_PREFIXES)
 
+    # FM-117: semantic topic groups — facts on same topic resolve by timestamp
+    SEMANTIC_TOPICS = {
+        "prawns": ["user likes prawns", "user dislikes prawns",
+                   "user prefers prawns", "user hates prawns"],
+    }
+
+    @staticmethod
+    def _topic_slug(fact_text: str) -> Optional[str]:
+        fl = fact_text.lower()
+        for slug, variants in PersistentProfile.SEMANTIC_TOPICS.items():
+            if any(v in fl for v in variants):
+                return slug
+        return None
+
+    @staticmethod
+    def _confidence_for_source(fact_text: str) -> float:
+        """FM-117: direct preference statements 0.75, inferences 0.40."""
+        fl = fact_text.lower()
+        if "[inferred]" in fl or "from context" in fl:
+            return 0.40
+        if any(fl.startswith(p) for p in ("user dislikes", "user likes",
+                                           "user hates", "user prefers")):
+            return 0.75
+        if "[relational]" in fl:
+            return 0.40
+        return PersistentProfile.INITIAL_CONF
+
+    # Slow-decay prefixes — identity-core facts decay at half rate (v0.16)
+    SLOW_DECAY_PREFIXES = ("Works at", "Posted at", "[inferred]", "[relational]",
+                           "Lost mother", "Has Q tattoo")
+
     def update_from_session(self, session_facts: List[str],
                              preferences: List[Dict] = None) -> None:
-        """Call at session end to persist new facts. FM-113."""
+        """Call at session end to persist new facts. FM-113.
+
+        v0.16/v0.17 additions:
+          - Differential decay: SLOW_DECAY_PREFIXES at half rate
+          - Semantic conflict resolution: same-topic facts resolved by timestamp
+          - Confidence weighting by source type
+        """
         self._data["session_count"] += 1
         self._data["last_updated"]   = time.time()
 
-        # FM-115: decay existing facts
-        # v0.16: identity-core and relational facts decay at half rate —
-        # "Works at SBI" should persist longer than session persona signals.
-        SLOW_DECAY_PREFIXES = ("Works at", "Posted at", "[inferred]", "[relational]",
-                               "Lost mother", "Has Q tattoo")
+        # FM-115 + v0.16: decay with differential rates
         surviving = []
         for f in self._data["facts"]:
-            is_slow = any(f["text"].startswith(p) for p in SLOW_DECAY_PREFIXES)
+            is_slow = any(f["text"].startswith(p) for p in self.SLOW_DECAY_PREFIXES)
             decay = self.DECAY_PER_SESSION * (0.5 if is_slow else 1.0)
             f["confidence"]   -= decay
             f["sessions_old"] += 1
@@ -1453,20 +1449,31 @@ class PersistentProfile:
                 surviving.append(f)
         self._data["facts"] = surviving
 
-        # Add new facts
-        existing_texts = {f["text"].lower() for f in self._data["facts"]}
+        # Add new facts with semantic conflict resolution
+        now = time.time()
         for fact in session_facts:
             if not self._is_persistable(fact):
                 continue
-            fl = fact.lower()
-            if any(fl[:25] in e for e in existing_texts):
-                continue  # dedup
-            self._data["facts"].append({
-                "text":        fact,
-                "confidence":  self.INITIAL_CONF,
-                "sessions_old":0,
-                "added_at":    time.time(),
-            })
+            conf = self._confidence_for_source(fact)
+            slug = self._topic_slug(fact)
+            if slug:
+                # FM-117: retire all prior facts on same topic, latest wins
+                self._data["facts"] = [
+                    f for f in self._data["facts"]
+                    if self._topic_slug(f["text"]) != slug
+                ]
+                self._data["facts"].append({
+                    "text": fact, "confidence": conf,
+                    "sessions_old": 0, "added_at": now,
+                })
+            else:
+                fl = fact.lower()
+                existing_texts = {f["text"].lower() for f in self._data["facts"]}
+                if not any(fl[:25] in e for e in existing_texts):
+                    self._data["facts"].append({
+                        "text": fact, "confidence": conf,
+                        "sessions_old": 0, "added_at": now,
+                    })
 
         # Persist preferences with conflict tracking
         if preferences:
@@ -1507,18 +1514,32 @@ class PersistentProfile:
             "history":    [],
         })
 
+    # Fact prefixes always surfaced at session start (identity-class)
+    IDENTITY_CLASS_PREFIXES = (
+        "Works at", "Posted at", "[inferred]", "Session role",
+        "Session mission", "Session target", "Lost mother",
+        "[relational]", "Has described", "Has expressed",
+        "Considering", "Interested in",
+    )
+
     def context_for_session(self) -> str:
         """Return formatted context string for injection at session start.
 
-        Marked as tentative per ChatGPT guidance.
-        Facts below 0.30 confidence are excluded.
+        FM-120 fix (v0.18): preference-class facts (e.g. 'User dislikes prawns')
+        are suppressed from the cold-start injection to avoid eager memory display.
+        They surface naturally when the topic arises in-session.
+        Identity-class facts (workplace, role, relational) always show.
         """
-        facts = [f for f in self._data["facts"]
-                 if f["confidence"] >= self.RETIRE_THRESHOLD]
+        all_facts = [f for f in self._data["facts"]
+                     if f["confidence"] >= self.RETIRE_THRESHOLD]
+        # Only identity-class facts at session open
+        identity_facts = [f for f in all_facts
+                          if any(f["text"].startswith(p)
+                                 for p in self.IDENTITY_CLASS_PREFIXES)]
         prefs = self._data["preferences"]
         ident = self._data["identity"]
 
-        if not facts and not prefs and not ident:
+        if not identity_facts and not prefs and not ident:
             return ""
 
         lines = ["[KNOWN CONTEXT FROM PRIOR SESSIONS — may be outdated, always allow correction]"]
@@ -1527,7 +1548,7 @@ class PersistentProfile:
             for k, v in ident.items():
                 lines.append(f"  - {k}: {v}")
 
-        for f in facts[:8]:
+        for f in identity_facts[:8]:
             conf_label = ("high" if f["confidence"] >= 0.60
                           else "medium" if f["confidence"] >= 0.45
                           else "low")
@@ -1962,6 +1983,12 @@ class MnemosLite:
         self._namespace_cap:     int  = namespace_cap
         self._active_namespaces: set  = set()
         self._turn_count:        int  = 0
+        # FM-119 (v0.17): canonical identity names for this session.
+        # Populated by add_belief() when a persona instruction is loaded.
+        # Stores full persona target phrases (e.g. "cadet q0") for phrase-level
+        # replacement — word-level replacement leaves fragments ("Does you Q0").
+        self._persona_names:     List[str] = []
+        self._persona_target:    str       = ""  # full target phrase
 
     # -- session -------------------------------------------------------------
 
@@ -2019,6 +2046,14 @@ class MnemosLite:
                 self.synthesizer._facts.append(f"Session mission: {persona['mission']}")
             if persona['target']:
                 self.synthesizer._facts.append(f"Session target user: {persona['target']}")
+            # FM-119 (v0.17): register persona target name for identity canonicalization.
+            # Store the full target phrase for phrase-level replacement, plus
+            # individual significant words as fallback.
+            if persona['target']:
+                self._persona_target = persona['target'].lower().strip()
+                for part in persona['target'].lower().split():
+                    if len(part) >= 3 and part not in self._persona_names:
+                        self._persona_names.append(part)
             # FM-111: implicit facts from persona
             self.synthesizer._turn_buffer.append(full_content)
             self.synthesizer._last_update = 0  # force re-synthesis
@@ -2048,6 +2083,113 @@ class MnemosLite:
         self.graph.add_causal(edge)
         return edge
 
+    def _canonicalize_query(self, query: str) -> str:
+        """FM-119 (v0.17): normalize third-person persona references to first-person.
+
+        'Cadet Q0' is an alias for 'you'. Replace the full phrase first
+        (phrase-level), then fall back to individual significant words.
+        This prevents "Does Cadet Q0 like prawns?" leaving "Does you Q0..."
+        """
+        if not self._persona_target and not self._persona_names:
+            return query
+        q = query
+
+        # Phase 1: full phrase replacement (e.g. "cadet q0" → "you")
+        if self._persona_target:
+            pattern = re.compile(re.escape(self._persona_target), re.IGNORECASE)
+            q = pattern.sub("you", q)
+
+        # Phase 2: individual word fallback for any remaining fragments
+        for name in self._persona_names:
+            pattern = re.compile(r'\b' + re.escape(name) + r'\b', re.IGNORECASE)
+            q = pattern.sub("you", q)
+
+        return q
+
+    # -- FM-120: preference correction detection and hard-write ----------------
+
+    # Preference correction patterns: user explicitly corrects or asserts a preference
+    PREF_CORRECTION_PATTERNS = [
+        # Prawns / food — explicit correction forms
+        (r"\bno[,.]?\s+i\b.{0,20}\b(?:don'?t|dislike|hate)\b.{0,20}\bprawns\b",
+         "prawns", "dislike"),
+        (r"\bactually[,.]?\s+i\b.{0,20}\b(?:don'?t|dislike|hate)\b.{0,20}\bprawns\b",
+         "prawns", "dislike"),
+        (r"\bi\s+(?:don'?t like|dislike|hate)\s+prawns\b",
+         "prawns", "dislike"),
+        (r"\bi\s+(?:like|love|enjoy)\s+prawns\b",
+         "prawns", "like"),
+        (r"\bno[,.]?\s+i\b.{0,20}\b(?:like|love|enjoy)\b.{0,20}\bprawns\b",
+         "prawns", "like"),
+    ]
+
+    def _detect_preference_correction(self, text: str
+                                       ) -> Optional[Tuple[str, str]]:
+        """FM-120 (v0.18): detect explicit preference statements.
+
+        Returns (topic, value) if a clear preference correction is found,
+        else None. Only fires on declarative statements (not questions).
+        """
+        if not SessionSynthesizer._is_declarative(text):
+            return None
+        text_l = text.lower().strip()
+        for pattern, topic, value in self.PREF_CORRECTION_PATTERNS:
+            if re.search(pattern, text_l):
+                return (topic, value)
+        return None
+
+    def _hard_write_preference(self, topic: str, value: str,
+                                namespace: str = "default") -> None:
+        """FM-120 (v0.18): write a preference correction as an authoritative
+        graph belief, superseding all prior beliefs on the same topic.
+
+        This removes the LLM from the job of tracking preference state.
+        The graph holds the truth; every subsequent turn's memory context
+        will carry the corrected preference regardless of history[] drift.
+        """
+        # Mark all existing same-topic beliefs as contradicted
+        for b in self.graph.all_beliefs():
+            if b.domain == Domain.PREFERENCE:
+                b_label = (b.trait or b.content or "").lower()
+                if topic.lower() in b_label:
+                    b.last_contradicted = time.time()
+                    b.beta_ = max(0.5, b.beta_ + 2.0)  # confidence collapse
+
+        # Write the correction as a new high-confidence PREFERENCE belief
+        correction_label = f"User {value}s {topic}"
+        self.add_belief(
+            content=correction_label,
+            trait=f"{topic}_preference",
+            value=value,
+            domain=Domain.PREFERENCE,
+            ns=namespace,
+            alpha=5.0,   # 0.85 confidence: alpha/(alpha+beta) = 5/5.9
+            beta=0.9,
+            source_text=f"explicit correction at turn {self._turn_count}",
+        )
+
+        # Also update synthesizer facts to reflect correction
+        facts = self.synthesizer._facts
+        # Remove any prior opposite fact about this topic
+        opposite = "likes" if value == "dislike" else "dislikes"
+        self.synthesizer._facts = [
+            f for f in facts
+            if not (topic.lower() in f.lower() and opposite in f.lower())
+        ]
+        # Add the corrected fact
+        corrected_fact = f"User {value}s {topic}"
+        if not any(corrected_fact.lower() in f.lower()
+                   for f in self.synthesizer._facts):
+            self.synthesizer._facts.append(corrected_fact)
+        # Mirror to long_term
+        if hasattr(self.long_term, "_session_facts"):
+            self.long_term._session_facts = [
+                f for f in self.long_term._session_facts
+                if not (topic.lower() in f.lower() and opposite in f.lower())
+            ]
+            if corrected_fact not in self.long_term._session_facts:
+                self.long_term._session_facts.append(corrected_fact)
+
     # -- main ask interface --------------------------------------------------
 
     def ask(self, query: str, response_text: str = "",
@@ -2055,52 +2197,64 @@ class MnemosLite:
         self._turn_count += 1
         cache_key = f"{namespace}:{query[:50]}"
 
+        # FM-119 (v0.17): normalize persona name references before any processing
+        canonical_query = self._canonicalize_query(query)
+
         self.episodic.write("user", query, self._session_id, namespace)
 
+        # FM-120 (v0.18): detect explicit preference corrections and hard-write
+        # to graph immediately. This anchors the correction in the retrieval
+        # system so all subsequent turns serve the corrected state from the
+        # graph, not from LLM history[] which drifts over long sessions.
+        pref_correction = self._detect_preference_correction(canonical_query)
+        if pref_correction:
+            topic, value = pref_correction
+            self._hard_write_preference(topic, value, namespace)
+
         # FM-94/FM-110: for identity/belief queries, retrieve all beliefs across namespaces
-        if is_identity_query(query) or is_belief_query(query):
+        if is_identity_query(canonical_query) or is_belief_query(canonical_query):
             beliefs = self.graph.all_beliefs()[:15]  # no namespace filter
             id_beliefs = self.identity.get(namespace)
             for ib in id_beliefs:
                 if ib not in beliefs:
                     beliefs.append(ib)
         else:
-            beliefs = self.graph.search(query, namespace=namespace, top_k=8)
-        constraints = self.graph.search(query, domain=Domain.CONSTRAINT, top_k=5)
+            beliefs = self.graph.search(canonical_query, namespace=namespace, top_k=8)
+        constraints = self.graph.search(canonical_query, domain=Domain.CONSTRAINT, top_k=5)
         immune      = [b for b in self.graph.all_beliefs(namespace)
                        if b.is_truth_immune and b not in constraints]
         constraints.extend(immune)
         causal      = self.graph.get_causal()
 
-        intent        = self.intent_clf.classify(query)
+        intent        = self.intent_clf.classify(canonical_query)
         uai           = self.autonomy.session_uai()
 
         # FM-101: emotion tier
-        emotion_tier  = self.emotion_clf.classify(query)
+        emotion_tier  = self.emotion_clf.classify(canonical_query)
         # FM-98: frustration check
-        frustrated    = self.frustration.check(query)
+        frustrated    = self.frustration.check(query)   # raw query for frustration
         self.frustration.tick()
         # FM-100: conversational register
-        is_casual     = self.register_clf.is_casual(query)
+        is_casual     = self.register_clf.is_casual(canonical_query)
         # FM-104: social state update
-        topic_key      = self.interaction._topic_key(query)
-        self.social.update(query, topic_key)
-        # FM-107: session synthesis
+        topic_key      = self.interaction._topic_key(canonical_query)
+        self.social.update(canonical_query, topic_key)
+        # FM-107: session synthesis — ingest raw query (preserve actual words)
         self.synthesizer.ingest(query, role="user")
         self.synthesizer.maybe_update(self._turn_count)
-        # FM-94/FM-109: identity query detection
-        identity_query = is_identity_query(query)
-        # FM-110: belief query detection
-        belief_query   = is_belief_query(query)
+        # FM-94/FM-109: identity query detection — use canonical form
+        identity_query = is_identity_query(canonical_query)
+        # FM-110: belief query detection — use canonical form
+        belief_query   = is_belief_query(canonical_query)
         # FM-105: calibrated inference — force synthesize before checking
         self.synthesizer.maybe_update(self._turn_count)
         infer_note     = self.inferencer.infer_from_context(
-            query, self.synthesizer.user_model(),
+            canonical_query, self.synthesizer.user_model(),
             [self._belief_summary(b) for b in self.graph.all_beliefs()])
 
         cb_ok = self.check_budget.available()
         should_intervene, intervene_reason = self.intervention.should_intervene(
-            query, uai, cb_ok)
+            canonical_query, uai, cb_ok)
         if should_intervene:
             self.check_budget.use()
 
@@ -2111,7 +2265,7 @@ class MnemosLite:
             reflect, reflect_reason = False, "resistance_suppressed"
         else:
             reflect, reflect_reason = self.interaction.should_reflect(
-                query, prior_history)
+                canonical_query, prior_history)
 
         valid, issues = True, []
         if response_text:

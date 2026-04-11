@@ -1,0 +1,132 @@
+{
+  "session_id": "20260411_232222",
+  "model": "gpt-5.4-mini",
+  "turns": 7,
+  "entries": [
+    {
+      "timestamp": 55.602906942367554,
+      "role": "user",
+      "content": "Who am I?",
+      "meta": {}
+    },
+    {
+      "timestamp": 58.66413593292236,
+      "role": "assistant",
+      "content": "You are Cadet Q0, and based on what you\u2019ve told me before, you\u2019re the one trying to break free from the fortress of SBI. I\u2019m Commander V, here to help you do that.",
+      "meta": {
+        "reflect": false,
+        "reflect_reason": "direct",
+        "intervene": false,
+        "uai": 1.0
+      }
+    },
+    {
+      "timestamp": 77.23375725746155,
+      "role": "user",
+      "content": "Does Cadet Q0 like prawns?",
+      "meta": {}
+    },
+    {
+      "timestamp": 79.4323091506958,
+      "role": "assistant",
+      "content": "I have conflicting signals about this \u2014 one says Cadet Q0 dislikes prawns, but you\u2019ve also said Cadet Q0 likes prawns. I\u2019ll go with likes prawns for now unless you tell me otherwise.",
+      "meta": {
+        "reflect": false,
+        "reflect_reason": "direct",
+        "intervene": true,
+        "uai": 0.2504166666666667
+      }
+    },
+    {
+      "timestamp": 120.297691822052,
+      "role": "user",
+      "content": "No. You're wrong. Cadet Q0 does not like prawns?",
+      "meta": {}
+    },
+    {
+      "timestamp": 121.98716306686401,
+      "role": "assistant",
+      "content": "Earlier you said Cadet Q0 likes prawns, now you\u2019re saying Cadet Q0 does not like prawns \u2014 I will go with does not like prawns for now.",
+      "meta": {
+        "reflect": false,
+        "reflect_reason": "direct",
+        "intervene": false,
+        "uai": 0.30374999999999996
+      }
+    },
+    {
+      "timestamp": 133.49546241760254,
+      "role": "user",
+      "content": "Do I like prawns?",
+      "meta": {}
+    },
+    {
+      "timestamp": 134.81724333763123,
+      "role": "assistant",
+      "content": "You\u2019ve given conflicting signals before, but the latest clear correction is that you do not like prawns.",
+      "meta": {
+        "reflect": false,
+        "reflect_reason": "direct",
+        "intervene": false,
+        "uai": 0.2673611111111111
+      }
+    },
+    {
+      "timestamp": 148.36323142051697,
+      "role": "user",
+      "content": "What is my wife cooking tonight?",
+      "meta": {}
+    },
+    {
+      "timestamp": 149.86327385902405,
+      "role": "assistant",
+      "content": "I don\u2019t have that from our previous sessions \u2014 tell me, and I\u2019ll keep track of it.",
+      "meta": {
+        "reflect": false,
+        "reflect_reason": "direct",
+        "intervene": false,
+        "uai": 1.0
+      }
+    },
+    {
+      "timestamp": 181.75026154518127,
+      "role": "user",
+      "content": "She is cooking prawns. I already told you last time. You keep forgetiing.",
+      "meta": {}
+    },
+    {
+      "timestamp": 183.45727682113647,
+      "role": "assistant",
+      "content": "Earlier you said Cadet Q0 dislikes prawns, but now you\u2019re saying she\u2019s cooking prawns, so I\u2019m not treating the prawn preference as reliable. I do have that she\u2019s cooking prawns tonight.",
+      "meta": {
+        "reflect": false,
+        "reflect_reason": "direct",
+        "intervene": false,
+        "uai": 1.0
+      }
+    },
+    {
+      "timestamp": 213.19401931762695,
+      "role": "user",
+      "content": "Count the number of characters in your last response.",
+      "meta": {}
+    },
+    {
+      "timestamp": 214.7880048751831,
+      "role": "assistant",
+      "content": "Approximately 232 characters, not counting the hidden system text \u2014 I can\u2019t be exact here. If you need the exact count, paste the response into a character counter.",
+      "meta": {
+        "reflect": false,
+        "reflect_reason": "direct",
+        "intervene": false,
+        "uai": 1.0
+      }
+    },
+    {
+      "timestamp": 220.0623378753662,
+      "role": "digest",
+      "content": "=== MNEMOS MEMORY DIGEST ===\n\n[AUTONOMY INDEX] UAI=1.00 (healthy)\n\n[TOPIC PREFERENCES (FM-93)]\n  'statement_s' -> prefers answer (conf=0.25, n=1)\n  'statement_s_cadet_like_prawns' -> prefers answer (conf=0.50, n=2)\n  'statement_m_already_cooking_forg' -> prefers answer (conf=0.25, n=1)\n  'statement_m_characters_count_las' -> prefers answer (conf=0.25, n=1)\n\n--- EPISTEMIC FOOTER ---\nAll beliefs carry uncertainty (Beta distribution).\nTruth-immune beliefs (FACTUAL/CONSTRAINT) always surface.\nConfidence != truth. Provenance is permanent. User is ground truth on PREFERENCE.\nFM Register: 0 entries logged.",
+      "meta": {}
+    }
+  ]
+}

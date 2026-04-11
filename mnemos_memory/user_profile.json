@@ -1,49 +1,55 @@
 {
   "version": "0.12",
-  "last_updated": 1775929570.9882395,
-  "session_count": 3,
+  "last_updated": 1775949120.6252983,
+  "session_count": 5,
   "facts": [
     {
-      "text": "Session role: commander v - the mentor of the user",
-      "confidence": 0.45000000000000007,
-      "sessions_old": 2,
-      "added_at": 1775927295.418653
-    },
-    {
-      "text": "Session mission: help cadet q0 break free from the fortress of sbi.",
-      "confidence": 0.45000000000000007,
-      "sessions_old": 2,
-      "added_at": 1775927295.4186604
-    },
-    {
-      "text": "Session target user: the user",
-      "confidence": 0.45000000000000007,
-      "sessions_old": 2,
-      "added_at": 1775927295.4186647
-    },
-    {
       "text": "[inferred] Works at SBI (from context)",
-      "confidence": 0.45000000000000007,
-      "sessions_old": 2,
+      "confidence": 0.3500000000000001,
+      "sessions_old": 4,
       "added_at": 1775927295.418668
     },
     {
       "text": "[inferred] User is Cadet Q0",
-      "confidence": 0.45000000000000007,
-      "sessions_old": 2,
+      "confidence": 0.3500000000000001,
+      "sessions_old": 4,
       "added_at": 1775927295.4186711
     },
     {
-      "text": "[persona mission] mission is to help Cadet Q0 break free from the fortress of SBI.",
-      "confidence": 0.45000000000000007,
-      "sessions_old": 2,
-      "added_at": 1775927295.4186745
+      "text": "Session role: commander v",
+      "confidence": 0.65,
+      "sessions_old": 0,
+      "added_at": 1775949120.6253257
     },
     {
-      "text": "User dislikes prawns",
-      "confidence": 0.45000000000000007,
-      "sessions_old": 2,
-      "added_at": 1775927295.4186773
+      "text": "Session mission: help cader q0 break free from the fortress of sbi.",
+      "confidence": 0.65,
+      "sessions_old": 0,
+      "added_at": 1775949120.6253257
+    },
+    {
+      "text": "Session target user: the user",
+      "confidence": 0.65,
+      "sessions_old": 0,
+      "added_at": 1775949120.6253257
+    },
+    {
+      "text": "[relational] Partner pattern: My wife often cooks prawns. (low confidence — user perception)",
+      "confidence": 0.4,
+      "sessions_old": 0,
+      "added_at": 1775949120.6253257
+    },
+    {
+      "text": "Boss context: My boss is an asshole.",
+      "confidence": 0.65,
+      "sessions_old": 0,
+      "added_at": 1775949120.6253257
+    },
+    {
+      "text": "[relational] Boss: perceived as difficult/toxic (low confidence — user perception)",
+      "confidence": 0.4,
+      "sessions_old": 0,
+      "added_at": 1775949120.6253257
     }
   ],
   "preferences": [],
