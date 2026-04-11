@@ -8,52 +8,87 @@
 
 *Co-evolved by Qarmik, Claude (Anthropic), and ChatGPT (OpenAI) — April 2026*
 
----
-
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/Python-3.8%2B-blue.svg)](https://python.org)
 [![Failure Modes](https://img.shields.io/badge/Failure%20Modes-108%20addressed-green.svg)](#the-failure-mode-register)
-[![Sessions](https://img.shields.io/badge/Real%20Sessions-5%20completed-orange.svg)](#what-real-sessions-revealed)
+[![Real Sessions](https://img.shields.io/badge/Real%20Sessions-5%20completed-orange.svg)](#what-real-sessions-revealed)
 
 </div>
 
 ---
 
+Most AI systems remember poorly.
+
+They retrieve what was said. They do not reason about what they *know* — how confident, how recent, whether it contradicts something else, whether surfacing it right now is actually good for the user.
+
+MNEMOS is a structured attempt to fix that.
+
+*This project is for engineers and researchers exploring how AI should behave across sessions — not just respond within one.*
+
+---
+
 ## The Name
 
-**MNEMOS** is pronounced *NEE-mos* — the M is silent, following the Greek pattern of its root.
-
-It comes from **Mnemosyne** (*neh-MOZ-ih-nee*) — one of the most powerful Titans in Greek mythology, and the mother of the nine Muses: poetry, history, music, astronomy. The Greeks understood something precise: you cannot have creativity, knowledge, or identity without memory as their foundation. Mnemosyne was not a filing cabinet. She was the cognitive substrate that made everything else possible.
+**MNEMOS** (*NEE-mos* — the M is silent) comes from **Mnemosyne** (*neh-MOZ-ih-nee*), the Greek Titan who personified memory itself and was the mother of the nine Muses. The Greeks understood something precise: you cannot have creativity, knowledge, or identity without memory as their foundation. She was not a filing cabinet. She was the cognitive substrate that made everything else possible.
 
 That is what MNEMOS is trying to be. The emphasis is on *trying*.
 
-There is a quiet irony in the name. We built a memory system through a conversation that itself had to be carefully preserved against forgetting — through handoff prompts, continuity PDFs, and architecture references — because the thread grew too long and began to lose its own context. The system designed to prevent AI memory failure is itself vulnerable to the memory limits of the medium it was built in. Mnemosyne would appreciate that.
+There is a quiet irony in the name. We built a memory system through a conversation that itself had to be carefully preserved against forgetting — through handoff prompts and continuity documents — because the thread grew too long and began to lose its own context. The system designed to prevent AI memory failure is itself vulnerable to the memory limits of the medium it was built in.
 
 ---
 
 ## Honest Status
 
-Before anything else, here is what MNEMOS is and is not.
+**What it is:** A carefully stress-tested architecture with a working Python prototype, 108 identified failure modes, and 5 real human sessions of validation. The core ideas — belief uncertainty, trust tiers, truth immunity, autonomy preservation — are genuine contributions beyond standard retrieval systems.
 
-**What it is:** A carefully stress-tested architecture for AI memory, with a working Python prototype, a record of 108 identified failure modes, and 5 real human sessions of validation. The core ideas — belief uncertainty, trust tiers, truth immunity, autonomy preservation — are genuine contributions beyond standard retrieval systems.
+**What it is not:** A solved problem. Real sessions still reveal calibration failures in tone, timing, and depth. Several layers are design targets rather than fully implemented components. Simulation reaches near-zero failures; real humans find a different class of problem entirely.
 
-**What it is not:** A solved problem. Real sessions still reveal calibration failures in tone, timing, and depth. Several architectural layers are design targets rather than fully implemented components. The simulation reaches near-zero failures; real human sessions find a different class of problem that no simulation surfaces.
+The right framing: *"We discovered the real structure of the problem and built a disciplined attempt at solving it."*
 
-The right framing is not "we built a complete system." It is "we discovered the real structure of the problem and built a disciplined attempt at solving it."
+---
+
+## A Real Failure (Why MNEMOS Exists)
+
+Early in testing, a user said *"I feel stuck"* mid-session.
+
+The system gave a seven-point bullet list: set goals, seek feedback, update your LinkedIn, network with three people this week.
+
+The user disengaged. The list was not wrong. It was completely tone-deaf. The user had just disclosed something personal and real. They did not need a productivity framework. They needed acknowledgment.
+
+This became FM-98 through FM-101 — a cluster of failures around emotional register, frustration recovery, and conversational tone. The fixes: a three-tier emotion classifier, a frustration tracker that changes approach immediately instead of asking clarifying questions, and a conversational register detector that suppresses structured formatting when the user is just talking.
+
+In sessions after those fixes: frustration-triggered clarification requests dropped to near zero. Preference violations (like bullet lists after a user said "no bullet lists") were eliminated in the session runner. Emotional over-escalation — crisis resources for mild disappointment — stopped occurring.
+
+That pattern repeated 108 times. A failure observed, named, fixed, measured. That is the method.
+
+---
+
+## What Actually Changes in Practice
+
+| Situation | Typical LLM | MNEMOS |
+|-----------|-------------|--------|
+| User says "I feel stuck" | Generic advice list | Recognizes emotional context, responds in prose, notes if it is a recurring pattern |
+| User says "your answers aren't helping" | Asks for clarification | Switches approach immediately — shorter, different format, no questions |
+| User preloads "no bullet lists" | Responds with bullets anyway | Enforces preference as a hard constraint, even under intervention pressure |
+| User discloses shellfish allergy once | May lose it across topic shifts | Surfaces in every relevant context regardless of retrieval score — truth-immune |
+| Same user, session 6 | Starts completely fresh | Compressed user model from prior sessions injected at session start |
+| User says "very sad" after minor frustration | Offers crisis resources | Classifies as LOW intensity — brief warm acknowledgment only |
+
+These are drawn from real sessions, not hypotheticals. The left column is what MNEMOS-lite v0.4 actually did.
 
 ---
 
 ## How It Started
 
-In early 2026, **Qarmik** came across a LinkedIn post by **Mei Ling Leung** — an AI engineer at [Embedded LLM](https://embeddedllm.com/about-us/) — writing about **MemPalace**, an open-source AI memory system built by Milla Jovovich using Claude.
+In early 2026, **Qarmik** read a LinkedIn post by **Mei Ling Leung** — AI engineer at [Embedded LLM](https://embeddedllm.com/about-us/) — about **MemPalace**, an open-source memory system built by Milla Jovovich using Claude.
 
-The post framed the problem in a way that stopped him: Alice in Resident Evil wakes up with no memory across six films, fighting to reconstruct who she is from fragments. That is not fiction. That is the AI memory problem. Every session ends, context vanishes, the model starts over.
+The post framed the problem cleanly: Alice in Resident Evil wakes up with no memory across six films, fighting to reconstruct who she is from fragments. That is the AI memory problem. Every session ends, context vanishes, the model starts over.
 
-Qarmik read the MemPalace repo, understood what it solved, and asked the harder question: *what does it not solve?*
+Qarmik read the MemPalace repo, understood what it solved, and asked: *what does it not solve?*
 
-That question became MNEMOS. His insight was this: what if memory wasn't storage at all, but a **living structure** — where beliefs compete, rise, fall, and reshape each other? Not a warehouse with a search engine. A system where ideas conflict, trust is tiered, and the passage of time changes what should be believed.
+His answer: MemPalace retrieves what was said. It does not reason about what is known — how confident, how trusted, when a belief should expire, whether helping the user more is actually making them less capable. What if memory were a living structure where beliefs compete, rise, fall, and reshape each other? Not storage. A system with judgment.
 
-That reframing changed the problem definition. Every layer in MNEMOS is a consequence of following it seriously.
+That question became MNEMOS.
 
 ---
 
@@ -62,36 +97,17 @@ That reframing changed the problem definition. Every layer in MNEMOS is a conseq
 > *Store everything. Reason carefully. Trust nothing blindly.*
 > *Respond fast. Degrade gracefully. Serve without replacing the human.*
 
-Invariant across every version. Not yet fully achieved. Worth pursuing.
-
----
-
-## Before MNEMOS vs With MNEMOS
-
-The most direct way to show what it does:
-
-| Situation | Baseline LLM | MNEMOS |
-|-----------|-------------|--------|
-| User says "I feel stuck" | Generic advice list | Detects emotional register, responds in prose, notes if this is a recurring pattern |
-| User says "your answers aren't helping" | Asks for clarification | Switches approach immediately — shorter, different format, no questions |
-| User preloads "no bullet lists" then asks a sensitive question | Responds with bullet list anyway | Enforces preference as a hard constraint, even under intervention pressure |
-| User discloses shellfish allergy once | May forget across topic shifts | Surfaces in every relevant context regardless of retrieval score — truth-immune |
-| Same user, session 6 | Starts fresh every time | Compressed user model from prior sessions injected at session start |
-| User says "very sad" after a minor frustration | Offers crisis resources | Classifies as LOW intensity — brief warm acknowledgment only |
-
-These are drawn from real sessions, not hypotheticals. The failures on the left are what MNEMOS-lite v0.4 through v0.7 actually did before the fixes.
+Invariant across every version.
 
 ---
 
 ## How It Was Built
 
-MNEMOS was stress-tested into existence through **adversarial co-evolution**.
+Adversarial co-evolution across seven specification versions, four code critique rounds, and five real human sessions.
 
-ChatGPT (acting as adversarial critic, codenamed **Commander V**) identified failure modes. Claude analyzed them, pushed back on invalid ones, implemented valid fixes, and ran simulations. Qarmik drove the session, relayed critiques, made the calls, and ran real human sessions to find what no simulation could surface.
+ChatGPT (codenamed **Commander V**) identified failure modes. Claude analyzed, pushed back on invalid ones, implemented valid fixes, ran simulations. Qarmik drove, relayed critiques, made the calls, and ran real sessions to find what simulation could not surface.
 
-Seven specification versions. Four rounds of code critique. Five real human sessions. 108 failure modes addressed.
-
-**Simulation results** (scripted personas, clean queries):
+**Simulation results** *(scripted personas — real sessions produce different failures, see below)*:
 
 | Version | Annoying | Wrong | Key fix |
 |---------|:--------:|:-----:|---------|
@@ -99,26 +115,24 @@ Seven specification versions. Four rounds of code critique. Five real human sess
 | v0.5 | 6 | 0 | InteractionMemory |
 | v0.6 | 3 | 0 | FM-87 through FM-92 |
 | v0.7 | 0 | 0 | FM-93: preference-blind re-entry |
-| v0.8 | 0 | 0 | FM-95 through FM-101 |
-| v0.9 | 0 | 0 | FM-102 through FM-108 |
-
-*Note: simulation results reflect scripted test scenarios. Real sessions produce a different class of failure — see below.*
+| v0.8 | 0 | 0 | FM-95 through FM-101: real-session calibration |
+| v0.9 | 0 | 0 | FM-102 through FM-108: social intelligence layer |
 
 ---
 
 ## What MNEMOS Still Gets Wrong
 
-This section exists because credibility requires honesty.
+Most failures are not about knowledge. They are about timing, tone, and restraint.
 
-**Depth inconsistency.** On professional and factual topics, the system engages substantively. On personal and psychological threads, it often stays at the surface — describing symptoms rather than naming the mechanism underneath. "You seem burned out" instead of "you have learned that effort has no payoff here, which is why you stopped trying."
+**Depth inconsistency.** On professional topics, the system engages substantively. On personal threads, it often stays at the surface — describing symptoms rather than mechanisms. "You seem burned out" instead of "you have learned that effort has no payoff here, which is why you stopped trying."
 
-**Session memory compression is partial.** The SessionSynthesizer extracts key facts using pattern matching — it catches explicit role and organization disclosures, but misses subtler signals. A user's emotional arc across a session is not yet captured.
+**Session memory compression is partial.** The SessionSynthesizer catches explicit disclosures. A user's emotional arc across a session is not yet captured.
 
-**Contextual inference is cautious.** When context strongly implies something the user hasn't stated explicitly, the system often declines to infer. Correct on epistemic grounds; frustrating in practice.
+**Cautious inference.** When context strongly implies something unstated, the system often declines to infer. Epistemically correct; practically frustrating.
 
-**Social state detection fires on text signals only.** The SocialStateTracker detects adversarial or depth-seeking tone through regex patterns. It misses tone carried through phrasing rhythm, brevity, or what is deliberately left unsaid.
+**Social detection is text-only.** The SocialStateTracker reads tone through patterns. It misses tone carried through brevity, rhythm, or deliberate omission.
 
-**Cross-session memory is nascent.** Facts persist via LongTermBehavior. A compressed narrative of who the user is across sessions does not yet exist in the way the doctor-who-knows-you analogy implies.
+**Cross-session memory is nascent.** Facts persist. A narrative of who the user is across sessions does not yet exist the way the architecture intends.
 
 FM-109+ is waiting in the next real session.
 
@@ -128,69 +142,43 @@ FM-109+ is waiting in the next real session.
 
 The constitution of MNEMOS. No layer may violate them.
 
-**I — Salience ≠ Truth**
-Importance scores govern retrieval priority only — never epistemic status. A frequently discussed belief is not a more true belief.
-*A rumour spreads through an office. Everyone is talking about it. That doesn't make it fact.*
-
-**II — Provenance is Permanent**
-Every belief traces to its source. Raw records are never deleted, even when beliefs are updated or overridden.
-*A court keeps the original testimony even after a verdict. You can update what you believe; you cannot destroy what was originally said.*
-
-**III — Uncertainty is First-Class**
-Every belief carries Beta(α,β). The variance of a belief matters as much as its mean. The system never pretends to be more certain than it is.
-*A good doctor says "I'm 80% confident it's X, 15% it could be Y." Not just "it's X."*
-
-**IV — Trust is Tiered**
-Preferences: high (user is ground truth). Self-reported facts: medium. External facts: low, require grounding.
-*If you tell me your own allergy, I trust it completely. If I read it in a newspaper, I verify first.*
-
-**V — Failures Must Be Loud**
-Silent failures are architecturally prohibited. Every layer exposes a health signal.
-*A fire alarm that fails must make noise, not just stop working.*
-
-**VI — Correctness + Speed Coexist**
-Fast path under 50ms for responsiveness. Deep path async for accuracy. Neither sacrifices the other.
-*A hospital has a triage nurse at the door and specialists in the back. The nurse doesn't wait.*
-
-**VII — The System Must Be Legible**
-The Memory Digest renders calibrated language, evidence counts, and an epistemic footer on every call — without exception. The system can always show its work.
-*A good advisor shows the evidence and assumptions, not just the conclusion.*
-
-**VIII — Bounded Intelligence Wins**
-The system knows when to stop updating itself. Some beliefs, once established, stop being revised by new inputs. Stability is a feature.
-*A student who rewrites their essay with every new article they read never finishes.*
-
-**IX — Remain Permanently Breakable**
-L15 Adversarial Layer runs continuously. The FM Register is never declared complete. Belief in completeness is itself a failure mode.
-*The best engineering teams never stop inspecting the bridge.*
+| # | Axiom | What it means |
+|---|-------|---------------|
+| I | Salience ≠ Truth | Importance governs retrieval priority only — never epistemic status |
+| II | Provenance is Permanent | Every belief traces to source. Raw records never deleted |
+| III | Uncertainty is First-Class | Every belief carries Beta(α,β). Variance matters as much as mean |
+| IV | Trust is Tiered | Preferences: high. Self-reported facts: medium. External: low |
+| V | Failures Must Be Loud | Silent failures architecturally prohibited. Every layer exposes health signal |
+| VI | Correctness + Speed Coexist | Fast path <50ms. Deep path async. Neither sacrifices the other |
+| VII | The System Must Be Legible | Memory Digest with calibrated language and epistemic footer — always |
+| VIII | Bounded Intelligence Wins | Non-Adaptive Core + convergence criterion. The system knows when to stop |
+| IX | Remain Permanently Breakable | L15 always active. FM Register never closed. Completeness is a failure mode |
 
 ---
 
 ## The 14 Layers
 
-Each layer has one job. Implementation status noted honestly.
+*MNEMOS is layered for clarity, but not all layers are equally mature. For current behavior, focus on L0–L4, L9, L12–L15.*
 
 | Layer | Name | Job | Status |
 |-------|------|-----|--------|
 | L0 | Fast Path | <50ms real-time access, TTL 72h | Implemented |
 | L1 | Episodic Store | Verbatim write-once records, BM25+dense search | Implemented |
-| L2 | Knowledge Graph | Beta(α,β) belief nodes, bounded influence propagation | Implemented |
+| L2 | Knowledge Graph | Beta(α,β) nodes, bounded influence propagation | Implemented |
 | L3 | Semantic Store | Async consolidation, versioned snapshots | Design target |
 | L4 | Inference Engine | Read-only context assembly, credibility filter | Implemented |
 | L5 | Safety Layer | Anomaly detection, circuit breakers | Partial |
 | L6 | Audit Log | Immutable append-only, signed records | Implemented |
-| L7 | Grounding Oracle | External validation for FACTUAL domain only | Design target |
+| L7 | Grounding Oracle | External validation, FACTUAL domain only | Design target |
 | L8 | Token Budget | Progressive loading by priority tier | Implemented |
 | L9 | Memory Digest | Calibrated render, epistemic footer always | Implemented |
 | L10 | Meta-Memory | Self-evaluation, bounded by RWB cap | Partial |
 | L11 | Arbitration | Cross-path conflict resolution with SLAs | Partial |
 | L12 | Non-Adaptive Core | IDENTITY frozen, CONSTRAINT typed expiry | Implemented |
 | L13 | Causal Attribution | Gates L10 updates, observed vs validated weight | Implemented |
-| L14 | Outcome Layer | User outcome as primary target, UAI tracking | Implemented |
+| L14 | Outcome Layer | User outcome primary target, UAI tracking | Implemented |
 | L15 | Adversarial Layer | Permanent internal critic, FM Register | Implemented |
 | L16 | Context Policy | Namespace-scoped objectives, drift detection | Partial |
-
-*Implemented = working in mnemos_lite.py. Partial = core mechanism present, full spec not realized. Design target = specified in architecture, not yet in code.*
 
 ---
 
@@ -198,32 +186,32 @@ Each layer has one job. Implementation status noted honestly.
 
 | Domain | Trust | Truth-Immune | Notes |
 |--------|-------|:------------:|-------|
-| `FACTUAL` | Low → oracle validates | ✓ | External claims. Grounding oracle required |
+| `FACTUAL` | Low → oracle validates | ✓ | External claims. Grounding required |
 | `CONSTRAINT` | High + Anchored | ✓ | Allergies, legal, safety. Always surfaces |
 | `PREFERENCE` | High — user is ground truth | | Never overridden by outcome score |
 | `EVALUATIVE` | Medium — attributed | | Assessments, not facts. Source mandatory |
 | `IDENTITY` | User-defined | | Multi-stable. Never force-merged |
-| `CAUSAL` | Medium | | Observed vs validated. 2+ contexts to validate |
+| `CAUSAL` | Medium | | Observed vs validated. 2+ contexts required |
 
 ---
 
 ## The Failure Mode Register
 
-108 failure modes identified across simulation and real sessions. Selected examples:
+108 failure modes identified across simulation and real sessions. Selected:
 
 | FM | Name | The failure | The fix |
 |----|------|-------------|---------|
-| 01 | Salience ≠ Truth | Importance scores contaminated truth judgments | 5 orthogonal scores, structurally decoupled |
-| 47 | Epistemic Sycophancy | System agreed with users to avoid friction | Truth-Preservation Override — 4 immune classes |
-| 87 | Learned Helplessness Loop | 7 direct answers → no reflection ever | Forced re-entry, topic-aware, prior history required |
-| 93 | Preference-Blind Re-entry | FM-87 fired even when user clearly preferred direct answers | Per-topic preference tracked, suppresses at ≥0.65 confidence |
-| 98 | Frustration Recovery Failure | "Not helping" → system asked for clarification | FrustrationTracker — change approach, no questions |
-| 100 | Bullet List as Default | Casual conversation got formatted reports | ConversationalRegister — prose for casual turns |
-| 101 | Emotion Over-escalation | "Very sad" triggered crisis resources | Three-tier classifier — LOW / MEDIUM / HIGH |
-| 104 | No Social State Tracking | System explained policy under social pressure instead of adapting | SocialStateTracker — live adversarial/depth model |
-| 107 | No Session Memory Compression | Each turn responded in isolation | SessionSynthesizer — compressed user model every 5 turns |
+| 01 | Salience ≠ Truth | Importance contaminated truth judgments | 5 orthogonal scores, structurally decoupled |
+| 47 | Epistemic Sycophancy | System agreed to avoid friction | Truth-Preservation Override |
+| 87 | Learned Helplessness Loop | 7 direct answers → no reflection ever | Forced re-entry, topic-aware |
+| 93 | Preference-Blind Re-entry | FM-87 fired despite user preference for direct answers | Per-topic preference tracked, suppresses at ≥0.65 confidence |
+| 98 | Frustration Recovery | "Not helping" → asked for clarification | FrustrationTracker — change approach, no questions |
+| 100 | Bullet List Default | Casual conversation got formatted reports | ConversationalRegister — prose for casual turns |
+| 101 | Emotion Over-escalation | "Very sad" triggered crisis resources | Three-tier classifier: LOW / MEDIUM / HIGH |
+| 104 | No Social State | System explained policy under pressure instead of adapting | SocialStateTracker — live adversarial/depth model |
+| 107 | No Session Compression | Each turn in isolation | SessionSynthesizer — compressed user model every 5 turns |
 
-Full register with all 108: [`docs/failure_modes.md`](docs/failure_modes.md)
+Full register: [`docs/failure_modes.md`](docs/failure_modes.md)
 
 **FM-109+ is open.**
 
@@ -231,18 +219,9 @@ Full register with all 108: [`docs/failure_modes.md`](docs/failure_modes.md)
 
 ## What Real Sessions Revealed
 
-Five real human sessions — one with a complete stranger who had no briefing — found failures that thousands of simulated turns never surfaced:
+Five real human sessions — including one with a complete stranger who had no briefing — found failures that thousands of simulated turns never surfaced. The document recording exactly what broke, why, and what it means: [`docs/where_mnemos_misreads_humans.md`](docs/where_mnemos_misreads_humans.md)
 
-- Emotion escalation on mild negative language
-- Bullet lists in casual conversation
-- Frustration answered with clarifying questions
-- Social pressure met with repeated policy explanation
-- Personal disclosures answered at surface depth
-- Each session starting without memory of the previous one
-
-The document that records exactly what broke and why: [`docs/where_mnemos_misreads_humans.md`](docs/where_mnemos_misreads_humans.md)
-
-The finding in one sentence: *MNEMOS rarely produces factually wrong outputs. Its failures are behavioral — timing, tone, and restraint.*
+*Simulation finds annoying failures. Real humans find a different class entirely — failures that require genuine ambiguity, emotional subtext, and unpredictable intent to trigger.*
 
 ---
 
@@ -252,7 +231,7 @@ MemPalace asks: *what did the user say that is relevant to this query?*
 
 MNEMOS asks: *what do I actually know about this user, how confident am I, should I trust it, and is surfacing it right now good for them?*
 
-MemPalace is a retrieval system. MNEMOS is an attempt at a reasoning system about what it knows about you. The practical difference appears at the edges: when two beliefs contradict, when a constraint must surface regardless of retrieval score, when helping the user less is actually serving them better.
+MemPalace is a retrieval system with impressive benchmark results. MNEMOS is an attempt at a reasoning system about what it knows about you. The difference appears at the edges — contradicting beliefs, truth-immune constraints, and the question of whether more help is actually less.
 
 ---
 
@@ -269,14 +248,10 @@ from mnemos_lite import MnemosLite, Domain
 m = MnemosLite()
 m.new_session()
 
-m.add_belief(
-    content="User has a severe shellfish allergy",
-    domain=Domain.CONSTRAINT, ns="health"
-)
-m.add_belief(
-    trait="response_style", value="concise",
-    context="work/technical", ns="work"
-)
+m.add_belief(content="User has a severe shellfish allergy",
+             domain=Domain.CONSTRAINT, ns="health")
+m.add_belief(trait="response_style", value="concise",
+             context="work/technical", ns="work")
 m.add_causal("low sleep", "focus drops", context="personal")
 
 context, validation = m.ask("Should I take on this project?", namespace="work")
@@ -284,7 +259,6 @@ print(m.digest())
 ```
 
 ```bash
-# Real sessions with a live LLM
 export OPENAI_API_KEY="your_key"
 python mnemos_session.py
 ```
@@ -307,11 +281,11 @@ mnemos/
 
 ---
 
-## Credits and Acknowledgements
+## Credits
 
 | Role | Who |
 |------|-----|
-| **Originating Insight** | **Qarmik** — the Memory Pyramid idea that changed the problem from storage to living structure |
+| **Originating Insight** | **Qarmik** — Memory Pyramid, changed the problem from storage to living structure |
 | **Implementation and Co-design** | **Claude** (Anthropic) |
 | **Adversarial Critic and Co-design** | **ChatGPT / Commander V** (OpenAI) |
 | **Catalyst** | **Milla Jovovich** — MemPalace showed what was possible and what remained unsolved |
