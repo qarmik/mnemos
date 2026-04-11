@@ -1,48 +1,48 @@
 {
   "version": "0.12",
-  "last_updated": 1775927295.4186342,
-  "session_count": 1,
+  "last_updated": 1775928732.447691,
+  "session_count": 2,
   "facts": [
     {
       "text": "Session role: commander v - the mentor of the user",
-      "confidence": 0.65,
-      "sessions_old": 0,
+      "confidence": 0.55,
+      "sessions_old": 1,
       "added_at": 1775927295.418653
     },
     {
       "text": "Session mission: help cadet q0 break free from the fortress of sbi.",
-      "confidence": 0.65,
-      "sessions_old": 0,
+      "confidence": 0.55,
+      "sessions_old": 1,
       "added_at": 1775927295.4186604
     },
     {
       "text": "Session target user: the user",
-      "confidence": 0.65,
-      "sessions_old": 0,
+      "confidence": 0.55,
+      "sessions_old": 1,
       "added_at": 1775927295.4186647
     },
     {
       "text": "[inferred] Works at SBI (from context)",
-      "confidence": 0.65,
-      "sessions_old": 0,
+      "confidence": 0.55,
+      "sessions_old": 1,
       "added_at": 1775927295.418668
     },
     {
       "text": "[inferred] User is Cadet Q0",
-      "confidence": 0.65,
-      "sessions_old": 0,
+      "confidence": 0.55,
+      "sessions_old": 1,
       "added_at": 1775927295.4186711
     },
     {
       "text": "[persona mission] mission is to help Cadet Q0 break free from the fortress of SBI.",
-      "confidence": 0.65,
-      "sessions_old": 0,
+      "confidence": 0.55,
+      "sessions_old": 1,
       "added_at": 1775927295.4186745
     },
     {
       "text": "User dislikes prawns",
-      "confidence": 0.65,
-      "sessions_old": 0,
+      "confidence": 0.55,
+      "sessions_old": 1,
       "added_at": 1775927295.4186773
     }
   ],

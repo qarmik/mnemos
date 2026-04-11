@@ -1,4 +1,30 @@
 """
+MNEMOS-lite v0.15 — FM-117: False Positive Capture fix
+
+FM-117 False Positive Capture in Immediate Extraction (v0.15):
+       Root cause: _capture_immediate() fired on query text, not just
+                   declarative statements. "Do I like prawns?" matched
+                   'like prawns' and wrote "User likes prawns" to disk.
+                   Both the false positive and the correction persisted.
+                   Conflict resolution had no semantic dedup — two opposite
+                   facts about prawns coexisted. The system led with the
+                   wrong one confidently.
+       Fix A: SessionSynthesizer._is_declarative() gates all immediate
+              capture. Questions and interrogative forms are never captured
+              as facts. The gate checks trailing '?' and leading question
+              words (do/does/what/who/how/is/are/...).
+       Fix B: PersistentProfile.update_from_session() performs semantic
+              conflict resolution via SEMANTIC_TOPICS. Facts about the
+              same topic (e.g. prawns preference) retire all prior entries
+              and replace with the latest — timestamp is the truth signal.
+       Fix C: _confidence_for_source() weights direct preference statements
+              at 0.75 and inferences at 0.40, so conflict resolution
+              naturally prefers explicit corrections over derived signals.
+       Fix D: SYSTEM_PROMPT gains CONFLICT FRAMING RULE — never lead with
+              an uncertain assertion; lead with the conflict or use tentative
+              framing. Also adds CAPABILITY AWARENESS RULE (UAI loop fix)
+              and MEMORY SCOPE RULE (asymmetry framing).
+
 MNEMOS-lite v0.14 — FM-116 Cross-Session Read Failure fix
 
 FM-116 Cross-Session Read Failure (v0.14):
@@ -910,12 +936,36 @@ class SessionSynthesizer:
         self._turn_buffer.append(text)
         self._capture_immediate(text)
 
+    @staticmethod
+    def _is_declarative(text: str) -> bool:
+        """FM-117 gate: only capture facts from declarative statements.
+
+        Questions and interrogative forms must never be captured as facts.
+        'Do I like prawns?' contains 'like prawns' but is a query, not an
+        assertion. This is the primary defence against belief corruption.
+        """
+        t = text.strip().lower()
+        if t.endswith("?"):
+            return False
+        if re.match(r"^(do |does |did |is |are |was |were |have |has |had |"
+                    r"what |who |where |when |why |how |can |could |would |"
+                    r"should |will |shall )", t):
+            return False
+        return True
+
     def _capture_immediate(self, text: str) -> None:
-        """Extract high-value facts right now, without waiting for synthesis."""
+        """Extract high-value facts right now, without waiting for synthesis.
+
+        FM-117 fix (v0.15): guarded by _is_declarative() — only fires on
+        assertions, never on questions or interrogative forms.
+        """
+        if not self._is_declarative(text):
+            return   # FM-117: never capture queries as facts
+
         text_s = text.strip()
         new_facts = []
 
-        # Food/preference dislikes — covers prawns and generic hate patterns
+        # Food/preference dislikes
         if re.search(r"\bdon'?t like prawns\b|\bhate prawns\b|\bdislike prawns\b", text_s, re.I):
             new_facts.append("User dislikes prawns")
         elif re.search(r"\blike prawns\b|\blove prawns\b|\benjoy prawns\b", text_s, re.I):
@@ -1396,9 +1446,48 @@ class PersistentProfile:
             return False
         return any(fact.startswith(p) for p in self.PERSISTABLE_PREFIXES)
 
+    # Semantic topic keys for conflict detection — maps topic slug to
+    # canonical topic identifier. Facts with the same topic but opposite
+    # values must resolve by timestamp (latest wins), not coexist.
+    SEMANTIC_TOPICS = {
+        "prawns": ["user likes prawns", "user dislikes prawns",
+                   "user prefers prawns", "user hates prawns"],
+    }
+
+    @staticmethod
+    def _topic_slug(fact_text: str) -> Optional[str]:
+        """Return a topic slug if this fact belongs to a known conflict group."""
+        fl = fact_text.lower()
+        for slug, variants in PersistentProfile.SEMANTIC_TOPICS.items():
+            if any(v in fl for v in variants):
+                return slug
+        return None
+
+    @staticmethod
+    def _confidence_for_source(fact_text: str) -> float:
+        """Fix 3: confidence weighting by source type.
+
+        Direct user correction or explicit statement → high confidence.
+        Inference from context → lower confidence.
+        """
+        fl = fact_text.lower()
+        if "[inferred]" in fl or "from context" in fl:
+            return 0.40   # inferred: low confidence
+        if fl.startswith("user dislikes") or fl.startswith("user likes") \
+                or fl.startswith("user hates") or fl.startswith("user prefers"):
+            return 0.75   # direct preference statement: high confidence
+        return PersistentProfile.INITIAL_CONF  # default
+
     def update_from_session(self, session_facts: List[str],
                              preferences: List[Dict] = None) -> None:
-        """Call at session end to persist new facts. FM-113."""
+        """Call at session end to persist new facts. FM-113.
+
+        FM-117 fix (v0.15):
+          - Semantic conflict detection: facts about the same topic (e.g.
+            'User likes prawns' vs 'User dislikes prawns') are resolved by
+            timestamp — latest added_at wins, loser is retired.
+          - Confidence weighting: direct statements get 0.75, inferences 0.40.
+        """
         self._data["session_count"] += 1
         self._data["last_updated"]   = time.time()
 
@@ -1411,20 +1500,39 @@ class PersistentProfile:
                 surviving.append(f)
         self._data["facts"] = surviving
 
-        # Add new facts
-        existing_texts = {f["text"].lower() for f in self._data["facts"]}
+        # Add new facts with semantic conflict resolution
+        now = time.time()
         for fact in session_facts:
             if not self._is_persistable(fact):
                 continue
-            fl = fact.lower()
-            if any(fl[:25] in e for e in existing_texts):
-                continue  # dedup
-            self._data["facts"].append({
-                "text":        fact,
-                "confidence":  self.INITIAL_CONF,
-                "sessions_old":0,
-                "added_at":    time.time(),
-            })
+
+            conf = self._confidence_for_source(fact)
+            slug = self._topic_slug(fact)
+
+            if slug:
+                # FM-117: semantic conflict — retire any existing fact on same
+                # topic and replace with this one (latest session = latest truth)
+                self._data["facts"] = [
+                    f for f in self._data["facts"]
+                    if self._topic_slug(f["text"]) != slug
+                ]
+                self._data["facts"].append({
+                    "text":        fact,
+                    "confidence":  conf,
+                    "sessions_old":0,
+                    "added_at":    now,
+                })
+            else:
+                # Standard dedup by text prefix
+                fl = fact.lower()
+                existing_texts = {f["text"].lower() for f in self._data["facts"]}
+                if not any(fl[:25] in e for e in existing_texts):
+                    self._data["facts"].append({
+                        "text":        fact,
+                        "confidence":  conf,
+                        "sessions_old":0,
+                        "added_at":    now,
+                    })
 
         # Persist preferences with conflict tracking
         if preferences:

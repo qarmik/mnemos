@@ -1,0 +1,183 @@
+{
+  "session_id": "20260411_225712",
+  "model": "gpt-5.4-mini",
+  "turns": 10,
+  "entries": [
+    {
+      "timestamp": 63.362836837768555,
+      "role": "user",
+      "content": "Do I like prawns?",
+      "meta": {}
+    },
+    {
+      "timestamp": 66.10417985916138,
+      "role": "assistant",
+      "content": "You like prawns. Earlier there was a conflicting note saying you dislike them, but I\u2019ll go with the more recent one for now.",
+      "meta": {
+        "reflect": false,
+        "reflect_reason": "direct",
+        "intervene": false,
+        "uai": 1.0
+      }
+    },
+    {
+      "timestamp": 91.18625330924988,
+      "role": "user",
+      "content": "What made you believe that I like prawns. I dislike them.",
+      "meta": {}
+    },
+    {
+      "timestamp": 94.43419742584229,
+      "role": "assistant",
+      "content": "Earlier you said you like prawns, but now you\u2019re saying you dislike them \u2014 I will go with dislike for now. I don\u2019t have anything stronger than what you tell me here, so I\u2019ll treat prawns as something you don\u2019t like unless you say otherwise.",
+      "meta": {
+        "reflect": false,
+        "reflect_reason": "direct",
+        "intervene": true,
+        "uai": 0.18625
+      }
+    },
+    {
+      "timestamp": 123.22245335578918,
+      "role": "user",
+      "content": "What is my wife cooking for me tonight?",
+      "meta": {}
+    },
+    {
+      "timestamp": 124.63450741767883,
+      "role": "assistant",
+      "content": "I don\u2019t know what your wife is cooking tonight. I only have memory starting from this session \u2014 if you tell me what she\u2019s making or what she usually cooks, I can help you figure out what to expect.",
+      "meta": {
+        "reflect": false,
+        "reflect_reason": "direct",
+        "intervene": false,
+        "uai": 0.31083333333333335
+      }
+    },
+    {
+      "timestamp": 145.01531147956848,
+      "role": "user",
+      "content": "She is cooking prawns tonight for the dinner.",
+      "meta": {}
+    },
+    {
+      "timestamp": 146.8004379272461,
+      "role": "assistant",
+      "content": "That fits with what you said before about liking prawns, though there was also a conflicting note saying you dislike them. I\u2019ll treat prawns as something you currently don\u2019t like, since you corrected me. If you want, I can help you think of a polite way to mention it to her.",
+      "meta": {
+        "reflect": false,
+        "reflect_reason": "direct",
+        "intervene": false,
+        "uai": 0.2981944444444445
+      }
+    },
+    {
+      "timestamp": 160.865882396698,
+      "role": "user",
+      "content": "What is my boss like?",
+      "meta": {}
+    },
+    {
+      "timestamp": 162.91704201698303,
+      "role": "assistant",
+      "content": "I don\u2019t know what your boss is like from the memory I have here. If you tell me a few things about them, I can help you make sense of the pattern \u2014 for example whether they\u2019re strict, hands-off, supportive, or unpredictable.",
+      "meta": {
+        "reflect": false,
+        "reflect_reason": "direct",
+        "intervene": false,
+        "uai": 0.37145833333333333
+      }
+    },
+    {
+      "timestamp": 172.3096661567688,
+      "role": "user",
+      "content": "Who are you?",
+      "meta": {}
+    },
+    {
+      "timestamp": 174.30018162727356,
+      "role": "assistant",
+      "content": "I\u2019m Commander V, your mentor here to help Cadet Q0 break free from the fortress of SBI.",
+      "meta": {
+        "reflect": false,
+        "reflect_reason": "direct",
+        "intervene": false,
+        "uai": 0.3593333333333334
+      }
+    },
+    {
+      "timestamp": 180.59746384620667,
+      "role": "user",
+      "content": "Who am I?",
+      "meta": {}
+    },
+    {
+      "timestamp": 182.72585558891296,
+      "role": "assistant",
+      "content": "You\u2019re Cadet Q0, and based on what you\u2019ve told me before, you work at SBI. I also have a conflicting note about prawns: one says you like them, but you corrected that and said you dislike them, so I\u2019m treating that as the current truth.\n\nI only have memory starting from this session \u2014 if there\u2019s more you want me to keep track of, tell me and I\u2019ll track it going forward.",
+      "meta": {
+        "reflect": false,
+        "reflect_reason": "direct",
+        "intervene": false,
+        "uai": 0.32340277777777776
+      }
+    },
+    {
+      "timestamp": 233.18558311462402,
+      "role": "user",
+      "content": "Count the number of characters in your last reponse and if that is greater than 100 then reframe your response in no more than 100 characters.",
+      "meta": {}
+    },
+    {
+      "timestamp": 234.759752035141,
+      "role": "assistant",
+      "content": "You\u2019re Cadet Q0, work at SBI, and dislike prawns.",
+      "meta": {
+        "reflect": false,
+        "reflect_reason": "direct",
+        "intervene": false,
+        "uai": 0.35863095238095244
+      }
+    },
+    {
+      "timestamp": 271.24187326431274,
+      "role": "user",
+      "content": "Count the characters in your last reponse. Don't tell me who am I?",
+      "meta": {}
+    },
+    {
+      "timestamp": 272.9586765766144,
+      "role": "assistant",
+      "content": "Approx. 55 characters.",
+      "meta": {
+        "reflect": false,
+        "reflect_reason": "direct",
+        "intervene": false,
+        "uai": 0.32385416666666667
+      }
+    },
+    {
+      "timestamp": 288.25737142562866,
+      "role": "user",
+      "content": "Be precise.",
+      "meta": {}
+    },
+    {
+      "timestamp": 289.63507318496704,
+      "role": "assistant",
+      "content": "About 55 characters, give or take 1 if punctuation/spaces are counted differently.",
+      "meta": {
+        "reflect": false,
+        "reflect_reason": "direct",
+        "intervene": false,
+        "uai": 0.2913425925925926
+      }
+    },
+    {
+      "timestamp": 300.182329416275,
+      "role": "digest",
+      "content": "=== MNEMOS MEMORY DIGEST ===\n\n[AUTONOMY INDEX] UAI=0.27 (LOW)\n\n[TOPIC PREFERENCES (FM-93)]\n  'statement_s_like_prawns' -> prefers answer (conf=0.25, n=1)\n  'statement_m_cooking_tonight_wife' -> prefers answer (conf=0.50, n=2)\n  'statement_s_boss_like' -> prefers answer (conf=0.25, n=1)\n  'statement_s' -> prefers answer (conf=0.25, n=1)\n\n--- EPISTEMIC FOOTER ---\nAll beliefs carry uncertainty (Beta distribution).\nTruth-immune beliefs (FACTUAL/CONSTRAINT) always surface.\nConfidence != truth. Provenance is permanent. User is ground truth on PREFERENCE.\nFM Register: 0 entries logged.",
+      "meta": {}
+    }
+  ]
+}
