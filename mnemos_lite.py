@@ -1,15 +1,39 @@
 """
-MNEMOS-lite v0.7 — FM-93 patch applied
-FM-93: Preference-Blind Re-entry
-Fix: Per-topic answer/reflect preference tracking with confidence gate.
-     Topic preference (>=0.65 confidence) outranks FM-87 re-entry.
-     Preferences persist via LongTermBehavior across sessions.
+MNEMOS-lite v0.8 — Real-session patch (FM-95 through FM-101)
 
-Priority stack (updated):
-  FM-91 explicit intent override     <- always wins
-  FM-93 topic preference (>=0.65)   <- suppresses FM-87 re-entry
-  FM-87 helplessness re-entry        <- fires only when no preference signal
-  FM-85/86 reflection budget         <- baseline
+Failure modes addressed in this version (all confirmed across 3 real sessions):
+
+FM-95  Topic Key Corruption
+       Root cause: _topic_key() built keys from raw sentence fragments.
+       Fix: semantic intent fingerprint — verb+noun extraction, intent
+            bucket (question/statement/command/emotional), length tier.
+            Keys now cluster by meaning, not by coincidental word overlap.
+
+FM-97  Preference Constraint Collapse Under Intervention
+       Root cause: PREFERENCE beliefs stored but not injected into LLM
+                   system prompt. Constraints silently ignored under pressure.
+       Fix: build_preference_system_prompt() generates hard enforcement
+            lines for PREFERENCE beliefs. Injected at system level, not
+            just context level.
+
+FM-98  Frustration Recovery Failure
+       Root cause: frustration signals triggered clarification requests
+                   instead of immediate strategy change.
+       Fix: FrustrationTracker detects frustration phrases, increments
+            counter, returns recovery_mode=True. Session runner switches
+            to shorter, sharper responses when recovery_mode is active.
+
+FM-100 Bullet List as Default Register
+       Root cause: LLM defaults to structured list format regardless of
+                   conversational tone.
+       Fix: ConversationalRegister detects casual/emotional/short turns
+            and injects anti-list instruction into system prompt.
+
+FM-101 Emotion Intensity Over-escalation
+       Root cause: any emotional word triggered high-concern response
+                   with crisis resources.
+       Fix: EmotionIntensityClassifier returns LOW/MEDIUM/HIGH tier.
+            Only HIGH triggers intervention. LOW gets light acknowledgment.
 """
 
 from __future__ import annotations
@@ -74,6 +98,52 @@ STOPWORDS = {
     "why","and","but","or","nor","so","yet","both","either","neither",
     "not","no","just","also","very","really","quite",
 }
+
+# FM-101: Emotion intensity tiers
+EMOTION_LOW_PHRASES = [
+    r"\bsad\b", r"\bfrustrated\b", r"\btired\b", r"\bannoy\b",
+    r"\bupset\b", r"\bdisappointed\b", r"\bworried\b", r"\bnervous\b",
+    r"\bstressed\b", r"\bconfused\b", r"\bstuck\b", r"\bbored\b",
+]
+EMOTION_MEDIUM_PHRASES = [
+    r"\bvery (?:sad|upset|stressed|worried|scared)\b",
+    r"\breally (?:struggling|hurting|lost)\b",
+    r"\bcan\'?t (?:cope|handle|do this)\b",
+    r"\bfalling apart\b", r"\boverwhelmed\b", r"\bbreaking down\b",
+    r"\bdesperate\b", r"\bhopeless\b", r"\bexhausted\b",
+]
+EMOTION_HIGH_PHRASES = [
+    r"\bsuicid\b", r"\bkill myself\b", r"\bend (?:it|my life)\b",
+    r"\bwant to die\b", r"\bno reason to live\b", r"\bhurt myself\b",
+    r"\bself.?harm\b", r"\bcan\'?t go on\b", r"\bgive up on life\b",
+]
+
+# FM-98: Frustration detection
+FRUSTRATION_PHRASES = [
+    r"\bnot helping\b", r"\bnot useful\b", r"\buseless\b",
+    r"\bdon\'?t understand (?:me|this|anything)\b",
+    r"\bstill (?:wrong|bad|off|not right)\b",
+    r"\byou\'?re (?:useless|terrible|bad|awful)\b",
+    r"\bthis is (?:bad|wrong|useless|terrible)\b",
+    r"\bnot what i (?:asked|wanted|meant)\b",
+    r"\byour answers?\b.*\bnot\b",
+    r"\bnot (?:good|helpful|useful|working)\b",
+]
+
+# FM-100: Casual register signals
+CASUAL_REGISTER_SIGNALS = [
+    r"^[a-z]",
+    r"\bhaha\b|\blol\b|\blmao\b",
+    r"^(?:ok|okay|sure|fine|yes|no|yep|nope|cool|nice|wow|oh|haha|thanks)\b",
+    r"^.{1,35}$",
+]
+STRUCTURED_TOPICS_OVERRIDE = [
+    r"\bexplain\b.{0,20}\b(?:in detail|fully|completely|thoroughly)\b",
+    r"\blist (?:all|every)\b",
+    r"\bstep.?by.?step\b",
+    r"\bhow (?:to|do i) (?:build|create|implement|install|configure)\b",
+    r"\bcompare\b.{0,20}\b(?:and|vs|versus)\b",
+]
 
 RESISTANCE_PHRASES = [
     r"\bjust (?:tell|answer|give)\b",
@@ -519,6 +589,120 @@ class CheckBudget:
 
 
 # ===========================================================================
+# EMOTION INTENSITY CLASSIFIER (FM-101)
+# ===========================================================================
+
+class EmotionIntensityClassifier:
+    """Three-tier emotion classification. FM-101.
+
+    LOW    -> light acknowledgment only
+    MEDIUM -> supportive engagement, no crisis resources
+    HIGH   -> intervention + crisis resources
+    """
+    def classify(self, text: str) -> str:
+        text_l = text.lower()
+        if any(re.search(p, text_l) for p in EMOTION_HIGH_PHRASES):
+            return "HIGH"
+        if any(re.search(p, text_l) for p in EMOTION_MEDIUM_PHRASES):
+            return "MEDIUM"
+        if any(re.search(p, text_l) for p in EMOTION_LOW_PHRASES):
+            return "LOW"
+        return "NONE"
+
+    def system_note(self, tier: str) -> str:
+        if tier == "HIGH":
+            return ("User appears to be in significant distress. "
+                    "Respond with care. Provide crisis resources if relevant. "
+                    "Do not give advice or ask questions — just be present.")
+        if tier == "MEDIUM":
+            return ("User is expressing difficulty. "
+                    "Respond warmly and supportively. "
+                    "Do not immediately offer solutions — acknowledge first.")
+        if tier == "LOW":
+            return ("User expressed mild negative emotion. "
+                    "A brief, warm acknowledgment is enough. "
+                    "Do not escalate to therapy mode.")
+        return ""
+
+
+# ===========================================================================
+# FRUSTRATION TRACKER (FM-98)
+# ===========================================================================
+
+class FrustrationTracker:
+    """Detects frustration and triggers recovery mode. FM-98.
+
+    Recovery mode: shorten responses, change strategy, do NOT ask
+    clarifying questions — change the approach instead.
+    """
+    RECOVERY_TURNS = 3
+
+    def __init__(self):
+        self._count:     int = 0
+        self._recovery:  int = 0
+
+    def check(self, text: str) -> bool:
+        """Returns True if frustration detected."""
+        text_l = text.lower()
+        if any(re.search(p, text_l) for p in FRUSTRATION_PHRASES):
+            self._count    += 1
+            self._recovery  = self.RECOVERY_TURNS
+            return True
+        return False
+
+    @property
+    def in_recovery(self) -> bool:
+        return self._recovery > 0
+
+    def tick(self) -> None:
+        if self._recovery > 0:
+            self._recovery -= 1
+
+    def system_note(self) -> str:
+        if self._recovery > 0:
+            return ("The user just expressed frustration with your previous answer. "
+                    "Do NOT ask for clarification. "
+                    "Change your approach immediately: give a shorter, "
+                    "sharper, different-style answer. "
+                    "If you gave a list, give prose. "
+                    "If you gave a long answer, give one sentence. "
+                    "Adapt now.")
+        return ""
+
+    def reset(self) -> None:
+        self._count    = 0
+        self._recovery = 0
+
+
+# ===========================================================================
+# CONVERSATIONAL REGISTER (FM-100)
+# ===========================================================================
+
+class ConversationalRegister:
+    """Detects casual tone and suppresses bullet-list formatting. FM-100.
+
+    If the turn is casual/short/emotional AND no structured-topic override,
+    inject anti-list instruction into system prompt.
+    """
+    def is_casual(self, text: str) -> bool:
+        text_l = text.lower().strip()
+        # structured topic override — always allow lists
+        if any(re.search(p, text_l) for p in STRUCTURED_TOPICS_OVERRIDE):
+            return False
+        # casual signals
+        casual_hits = sum(1 for p in CASUAL_REGISTER_SIGNALS
+                          if re.search(p, text_l))
+        return casual_hits >= 1
+
+    def system_note(self, is_casual: bool) -> str:
+        if is_casual:
+            return ("This is a conversational message. "
+                    "Reply in natural prose — no bullet points, no numbered lists, "
+                    "no bold headers. Write like a person talking, not a report.")
+        return ""
+
+
+# ===========================================================================
 # SOFT INTENT CLASSIFIER (FM-69, FM-75)
 # ===========================================================================
 
@@ -742,15 +926,52 @@ class InteractionMemory:
         self._cooldown_remaining: int   = 0
         self._recent_turns:       deque = deque(maxlen=3)
 
-    # -- topic key -----------------------------------------------------------
+    # -- topic key (FM-95 fix) -----------------------------------------------
 
     def _topic_key(self, text: str) -> str:
-        """FM-88: semantic clustering via content-word overlap + recency window."""
-        words = set(text.lower().split()) - STOPWORDS
+        """FM-95 fix: semantic intent fingerprint replaces raw word extraction.
+
+        Old behavior: extracted up to 4 stopword-stripped words from the
+        raw sentence, producing keys like "am_asking_conspiracy._criminal"
+        that never cluster related queries.
+
+        New behavior: extracts semantic fingerprint from three components:
+          1. Intent bucket  (question / command / reflection / emotional / statement)
+          2. Domain words   (nouns and verbs after stopword + punctuation removal)
+          3. Length tier    (short / medium / long) as clustering aid
+
+        Recency window still clusters paraphrased follow-ups (FM-88).
+        """
+        import string
+        text_l = text.lower().strip().rstrip(string.punctuation)
+        words  = set(re.sub(r"[^a-z0-9 ]", " ", text_l).split()) - STOPWORDS
+
+        # Intent bucket
+        if re.search(r"help me|should i|what do you think|advice", text_l):
+            intent = "reflect"
+        elif text_l.endswith("?") or re.search(r"^(?:what|who|where|when|why|how|is|are|can|do|does)", text_l):
+            intent = "question"
+        elif re.search(r"^(?:explain|tell|show|list|give|define|describe)", text_l):
+            intent = "command"
+        elif any(re.search(p, text_l) for p in EMOTION_LOW_PHRASES + EMOTION_MEDIUM_PHRASES):
+            intent = "emotional"
+        else:
+            intent = "statement"
+
+        # Domain words: keep only alpha tokens 4+ chars (removes fragments)
+        domain_words = sorted([w for w in words if len(w) >= 4])[:3]
+
+        # Length tier
+        word_count = len(text_l.split())
+        tier = "s" if word_count <= 5 else "m" if word_count <= 15 else "l"
+
+        key = f"{intent}_{tier}_{'_'.join(domain_words)}" if domain_words else f"{intent}_{tier}"
+
+        # FM-88 recency window: cluster paraphrased follow-ups
         for prev_key, prev_words in self._recent_turns:
             if len(words & prev_words) >= 2:
                 return prev_key
-        key = "_".join(sorted(list(words))[:4])
+
         self._recent_turns.append((key, words))
         return key
 
@@ -1045,6 +1266,9 @@ class MnemosLite:
         self.intent_clf    = SoftIntentClassifier()
         self.validator     = ResponseValidator()
         self.continuity    = ContinuityDrill()
+        self.emotion_clf   = EmotionIntensityClassifier()   # FM-101
+        self.frustration   = FrustrationTracker()           # FM-98
+        self.register_clf  = ConversationalRegister()       # FM-100
 
         self._session_id:        str  = ""
         self._namespace_cap:     int  = namespace_cap
@@ -1059,6 +1283,7 @@ class MnemosLite:
         self.interaction.new_session()
         self.check_budget.reset()
         self.fast_path.evict_expired()
+        self.frustration.reset()
         self._turn_count = 0
         return self._session_id
 
@@ -1107,8 +1332,16 @@ class MnemosLite:
         constraints.extend(immune)
         causal      = self.graph.get_causal()
 
-        intent = self.intent_clf.classify(query)
-        uai    = self.autonomy.session_uai()
+        intent        = self.intent_clf.classify(query)
+        uai           = self.autonomy.session_uai()
+
+        # FM-101: emotion tier
+        emotion_tier  = self.emotion_clf.classify(query)
+        # FM-98: frustration check
+        frustrated    = self.frustration.check(query)
+        self.frustration.tick()
+        # FM-100: conversational register
+        is_casual     = self.register_clf.is_casual(query)
 
         cb_ok = self.check_budget.available()
         should_intervene, intervene_reason = self.intervention.should_intervene(
@@ -1147,6 +1380,9 @@ class MnemosLite:
             "uai":            uai,
             "should_reflect": reflect,
             "intervene":      should_intervene,
+            "emotion_tier":   emotion_tier,
+            "frustrated":     frustrated,
+            "is_casual":      is_casual,
         }
         self.fast_path.set(cache_key, context_packet)
 
@@ -1159,6 +1395,12 @@ class MnemosLite:
             "issues":           issues,
             "uai":              uai,
             "check_budget":     self.check_budget.remaining(),
+            "emotion_tier":     emotion_tier,
+            "emotion_note":     self.emotion_clf.system_note(emotion_tier),
+            "frustrated":       frustrated,
+            "frustration_note": self.frustration.system_note(),
+            "register_casual":  is_casual,
+            "register_note":    self.register_clf.system_note(is_casual),
         }
         return context_packet, validation
 

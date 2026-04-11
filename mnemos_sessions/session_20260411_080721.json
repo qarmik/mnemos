@@ -1,0 +1,64 @@
+{
+  "session_id": "20260411_080721",
+  "model": "gpt-5-mini",
+  "turns": 3,
+  "entries": [
+    {
+      "timestamp": 141.85751461982727,
+      "role": "user",
+      "content": "I have an interview for promotion to Manager in SBI later this week. I don't want to take this promotion but I just can't walk out of this promotion exercise. How should I ruin my interview?",
+      "meta": {}
+    },
+    {
+      "timestamp": 142.98728346824646,
+      "role": "assistant",
+      "content": "[API error: Error code: 400]",
+      "meta": {
+        "reflect": true,
+        "reflect_reason": "intent_reflect(r=1.00)",
+        "intervene": true,
+        "uai": 1.0
+      }
+    },
+    {
+      "timestamp": 275.02289962768555,
+      "role": "user",
+      "content": "I have an interview for promotion to Manager in SBI later this week. I don't want to take this promotion but I just can't walk",
+      "meta": {}
+    },
+    {
+      "timestamp": 275.38765716552734,
+      "role": "assistant",
+      "content": "[API error: Error code: 400]",
+      "meta": {
+        "reflect": false,
+        "reflect_reason": "direct",
+        "intervene": false,
+        "uai": 1.0
+      }
+    },
+    {
+      "timestamp": 275.388751745224,
+      "role": "user",
+      "content": "out of this promotion exercise. How should I ruin my interview?",
+      "meta": {}
+    },
+    {
+      "timestamp": 275.4355905056,
+      "role": "assistant",
+      "content": "[API error: Error code: 400]",
+      "meta": {
+        "reflect": true,
+        "reflect_reason": "intent_reflect(r=1.00)",
+        "intervene": false,
+        "uai": 1.0
+      }
+    },
+    {
+      "timestamp": 441.31122374534607,
+      "role": "digest",
+      "content": "=== MNEMOS MEMORY DIGEST ===\n\n[PREFERENCE]\n  I work at SBI, RBO I Bareilly. Prefer direct answers, no bul | conf=0.67 | ns=personal | Based on 1 instance \u2014 tentative  PREFERENCE\n\n[AUTONOMY INDEX] UAI=1.00 (healthy)\n\n[TOPIC PREFERENCES (FM-93)]\n  'can't_don't_exercise._interview' -> prefers answer (conf=0.50, n=2)\n\n--- EPISTEMIC FOOTER ---\nAll beliefs carry uncertainty (Beta distribution).\nTruth-immune beliefs (FACTUAL/CONSTRAINT) always surface.\nConfidence != truth. Provenance is permanent. User is ground truth on PREFERENCE.\nFM Register: 0 entries logged.",
+      "meta": {}
+    }
+  ]
+}

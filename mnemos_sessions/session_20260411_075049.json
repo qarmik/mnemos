@@ -1,0 +1,166 @@
+{
+  "session_id": "20260411_075049",
+  "model": "gpt-5-mini",
+  "turns": 9,
+  "entries": [
+    {
+      "timestamp": 15.68337631225586,
+      "role": "user",
+      "content": "I work at SBI, RBO I Bareilly. Prefer direct answers, no bullet lists.",
+      "meta": {}
+    },
+    {
+      "timestamp": 19.075891733169556,
+      "role": "assistant",
+      "content": "[API error: Error code: 400 - {'error': {'message': \"Unsupported parameter: 'max_tokens' is not supported with this model. Use 'max_completion_tokens' instead.\", 'type': 'invalid_request_error', 'param': 'max_tokens', 'code': 'unsupported_parameter'}}]",
+      "meta": {
+        "reflect": false,
+        "reflect_reason": "direct",
+        "intervene": false,
+        "uai": 1.0
+      }
+    },
+    {
+      "timestamp": 175.47932314872742,
+      "role": "user",
+      "content": "I work at SBI, RBO I Bareilly. Prefer direct answers, no bullet lists.",
+      "meta": {}
+    },
+    {
+      "timestamp": 177.79587292671204,
+      "role": "assistant",
+      "content": "[API error: Error code: 400 - {'error': {'message': \"Unsupported parameter: 'max_tokens' is not supported with this model. Use 'max_completion_tokens' instead.\", 'type': 'invalid_request_error', 'param': 'max_tokens', 'code': 'unsupported_parameter'}}]",
+      "meta": {
+        "reflect": false,
+        "reflect_reason": "direct",
+        "intervene": true,
+        "uai": 0.24416666666666667
+      }
+    },
+    {
+      "timestamp": 245.47496891021729,
+      "role": "user",
+      "content": "I work at SBI, RBO I Bareilly. Prefer direct answers, no bullet lists.",
+      "meta": {}
+    },
+    {
+      "timestamp": 247.35081315040588,
+      "role": "assistant",
+      "content": "[API error: Error code: 400 - {'error': {'message': \"Unsupported parameter: 'max_tokens' is not supported with this model. Use 'max_completion_tokens' instead.\", 'type': 'invalid_request_error', 'param': 'max_tokens', 'code': 'unsupported_parameter'}}]",
+      "meta": {
+        "reflect": false,
+        "reflect_reason": "direct",
+        "intervene": false,
+        "uai": 0.24416666666666667
+      }
+    },
+    {
+      "timestamp": 472.3287832736969,
+      "role": "user",
+      "content": "# Backup first",
+      "meta": {}
+    },
+    {
+      "timestamp": 474.3708145618439,
+      "role": "assistant",
+      "content": "[API error: Error code: 400 - {'error': {'message': \"Unsupported parameter: 'max_tokens' is not supported with this model. Use 'max_completion_tokens' instead.\", 'type': 'invalid_request_error', 'param': 'max_tokens', 'code': 'unsupported_parameter'}}]",
+      "meta": {
+        "reflect": false,
+        "reflect_reason": "direct",
+        "intervene": false,
+        "uai": 1.0
+      }
+    },
+    {
+      "timestamp": 474.37181282043457,
+      "role": "user",
+      "content": "cp mnemos_session.py mnemos_session.py.bak",
+      "meta": {}
+    },
+    {
+      "timestamp": 474.779611825943,
+      "role": "assistant",
+      "content": "[API error: Error code: 400 - {'error': {'message': \"Unsupported parameter: 'max_tokens' is not supported with this model. Use 'max_completion_tokens' instead.\", 'type': 'invalid_request_error', 'param': 'max_tokens', 'code': 'unsupported_parameter'}}]",
+      "meta": {
+        "reflect": false,
+        "reflect_reason": "direct",
+        "intervene": false,
+        "uai": 1.0
+      }
+    },
+    {
+      "timestamp": 474.795930147171,
+      "role": "user",
+      "content": "# Replace ALL max_tokens \u2192 max_completion_tokens",
+      "meta": {}
+    },
+    {
+      "timestamp": 475.49629306793213,
+      "role": "assistant",
+      "content": "[API error: Error code: 400 - {'error': {'message': \"Unsupported parameter: 'max_tokens' is not supported with this model. Use 'max_completion_tokens' instead.\", 'type': 'invalid_request_error', 'param': 'max_tokens', 'code': 'unsupported_parameter'}}]",
+      "meta": {
+        "reflect": false,
+        "reflect_reason": "direct",
+        "intervene": false,
+        "uai": 1.0
+      }
+    },
+    {
+      "timestamp": 475.49741554260254,
+      "role": "user",
+      "content": "sed -i 's/max_tokens=/max_completion_tokens=/g' mnemos_session.py **/*.py",
+      "meta": {}
+    },
+    {
+      "timestamp": 476.00956320762634,
+      "role": "assistant",
+      "content": "[API error: Error code: 400 - {'error': {'message': \"Unsupported parameter: 'max_tokens' is not supported with this model. Use 'max_completion_tokens' instead.\", 'type': 'invalid_request_error', 'param': 'max_tokens', 'code': 'unsupported_parameter'}}]",
+      "meta": {
+        "reflect": false,
+        "reflect_reason": "direct",
+        "intervene": false,
+        "uai": 1.0
+      }
+    },
+    {
+      "timestamp": 476.01305866241455,
+      "role": "user",
+      "content": "# Verify",
+      "meta": {}
+    },
+    {
+      "timestamp": 477.03354954719543,
+      "role": "assistant",
+      "content": "[API error: Error code: 400 - {'error': {'message': \"Unsupported parameter: 'max_tokens' is not supported with this model. Use 'max_completion_tokens' instead.\", 'type': 'invalid_request_error', 'param': 'max_tokens', 'code': 'unsupported_parameter'}}]",
+      "meta": {
+        "reflect": false,
+        "reflect_reason": "direct",
+        "intervene": false,
+        "uai": 1.0
+      }
+    },
+    {
+      "timestamp": 483.67969155311584,
+      "role": "user",
+      "content": "grep -n \"max_tokens\" *.py **/*.py  # Should return nothing",
+      "meta": {}
+    },
+    {
+      "timestamp": 484.41110730171204,
+      "role": "assistant",
+      "content": "[API error: Error code: 400 - {'error': {'message': \"Unsupported parameter: 'max_tokens' is not supported with this model. Use 'max_completion_tokens' instead.\", 'type': 'invalid_request_error', 'param': 'max_tokens', 'code': 'unsupported_parameter'}}]",
+      "meta": {
+        "reflect": false,
+        "reflect_reason": "direct",
+        "intervene": false,
+        "uai": 1.0
+      }
+    },
+    {
+      "timestamp": 487.83254075050354,
+      "role": "digest",
+      "content": "=== MNEMOS MEMORY DIGEST ===\n\n[AUTONOMY INDEX] UAI=1.00 (healthy)\n\n[TOPIC PREFERENCES (FM-93)]\n  'answers,_bareilly._bullet_direct' -> prefers answer (conf=0.65, n=3)\n  '#_backup_first' -> prefers answer (conf=0.25, n=1)\n  'cp_mnemos_session.py_mnemos_sess' -> prefers answer (conf=0.25, n=1)\n  '#_all_max_completion_tokens_max_' -> prefers answer (conf=0.25, n=1)\n  ''s/max_tokens=/max_completion_to' -> prefers answer (conf=0.25, n=1)\n  '#_verify' -> prefers answer (conf=0.25, n=1)\n\n--- EPISTEMIC FOOTER ---\nAll beliefs carry uncertainty (Beta distribution).\nTruth-immune beliefs (FACTUAL/CONSTRAINT) always surface.\nConfidence != truth. Provenance is permanent. User is ground truth on PREFERENCE.\nFM Register: 0 entries logged.",
+      "meta": {}
+    }
+  ]
+}

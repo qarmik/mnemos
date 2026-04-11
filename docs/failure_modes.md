@@ -172,6 +172,23 @@ Preference signal accumulation is slower than needed when a user asks varied que
 
 This remains a candidate until observed in a real session.
 
+
+---
+
+## FM-95 to FM-101 — Real Session R1: Human Calibration
+
+Confirmed across 3 real human sessions. April 2026.
+
+| FM | Name | Resolution |
+|----|------|-----------|
+| 95 | Topic Key Corruption | `_topic_key()` rebuilt as semantic intent fingerprint: intent bucket + domain words + length tier. Keys now cluster by meaning, not sentence fragments. |
+| 96 | Reasoned Pushback Blindness | Intervention policy has no mechanism to update stance based on argument quality. Single organic instance — pending replication. |
+| 97 | Preference Constraint Collapse Under Intervention | System prompt now contains hard enforcement clause for PREFERENCE beliefs. Preferences injected at system level, not just context level. |
+| 98 | Frustration Recovery Failure | `FrustrationTracker` detects frustration signals, activates recovery mode (3 turns). Recovery mode: change approach immediately, no clarifying questions. |
+| 99 | Effort Tolerance Blindness | Scripted-session origin only. Downgraded — needs organic confirmation. |
+| 100 | Bullet List as Default Register | `ConversationalRegister` classifies casual vs structured turns. Casual turns inject anti-list instruction into system prompt. |
+| 101 | Emotion Intensity Over-escalation | `EmotionIntensityClassifier` returns LOW/MEDIUM/HIGH. Only HIGH triggers intervention + crisis resources. LOW gets brief warm acknowledgment. |
+
 ---
 
 ## On the register staying open
