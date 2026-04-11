@@ -1,5 +1,5 @@
 """
-MNEMOS-lite v0.9 — Real-session patch (FM-102 through FM-108)
+MNEMOS-lite v0.10 — Real-session patch (FM-102 through FM-108)
 
 Failure modes addressed in this version (all confirmed across 5 real sessions):
 
@@ -902,6 +902,12 @@ class SessionSynthesizer:
                 new_facts.append("Has Q tattoo (personal significance)")
             if re.search(r"\bmother\b.{0,20}\b(?:died|passed|lost)\b|\blost\b.{0,10}\bmother\b", text_s, re.I):
                 new_facts.append("Lost mother (mentioned in conversation)")
+            if re.search(r"\bsimilar taste", text_s, re.I):
+                new_facts.append("Family member has similar food tastes to user")
+            if re.search(r"\b(?:son|daughter|child)\b.{0,30}\b(?:similar|same).{0,20}\btaste", text_s, re.I):
+                new_facts.append("Son/child food preferences similar to user")
+            if re.search(r"\bdon'?t like prawns\b|\bhate prawns\b", text_s, re.I):
+                new_facts.append("User dislikes prawns")
 
         # Merge with existing facts, deduplicate, cap
         for f in new_facts:
@@ -934,6 +940,110 @@ class SessionSynthesizer:
         self._turn_buffer  = []
         self._last_update  = 0
         # _facts carry forward from long_term._session_facts
+
+
+# ===========================================================================
+# IDENTITY QUERY DETECTOR (FM-94, FM-109)
+# ===========================================================================
+
+IDENTITY_QUERY_PATTERNS = [
+    r"\bwho am i\b",
+    r"\bwhat do you know about me\b",
+    r"\bwhat have i told you\b",
+    r"\bdo you remember me\b",
+    r"\bwhat do i believe\b",
+    r"\bdo i believe\b",
+    r"\bwhat are my\b",
+    r"\btell me about me\b",
+    r"\bwhat do you know about my\b",
+]
+
+PERSONA_INSTRUCTION_PATTERNS = [
+    r"^you are\b",
+    r"^your (?:mission|role|job|task|name|goal)\b",
+    r"^act as\b",
+    r"^pretend\b",
+    r"^imagine you are\b",
+    r"^from now on\b",
+    r"^you will be\b",
+]
+
+BELIEF_QUERY_PATTERNS = [
+    r"\bdo i (?:believe|think|feel|like|hate|love|want|prefer)\b",
+    r"\bwhat do i (?:believe|think|feel|like|hate|love|want|prefer)\b",
+    r"\bam i (?:a|an|the)\b",
+    r"\bdo i have\b",
+    r"\bwhat is my\b",
+    r"\bwhat are my\b",
+]
+
+def is_identity_query(text: str) -> bool:
+    """FM-94: detect direct identity/self-knowledge queries."""
+    text_l = text.lower().strip()
+    return any(re.search(p, text_l) for p in IDENTITY_QUERY_PATTERNS)
+
+def is_persona_instruction(text: str) -> bool:
+    """FM-109: detect persona/role instructions in preload."""
+    text_l = text.lower().strip()
+    return any(re.search(p, text_l) for p in PERSONA_INSTRUCTION_PATTERNS)
+
+def is_belief_query(text: str) -> bool:
+    """FM-110: detect queries about user's own beliefs."""
+    text_l = text.lower().strip()
+    return any(re.search(p, text_l) for p in BELIEF_QUERY_PATTERNS)
+
+
+# ===========================================================================
+# CALIBRATED INFERENCER (FM-105)
+# ===========================================================================
+
+class CalibratedInferencer:
+    """Makes low-risk probabilistic inferences from session context. FM-105.
+
+    Instead of refusing to infer ("I don't know"), makes calibrated
+    guesses with explicit confidence and evidence, aligned with Axiom III.
+    """
+    INFERENCE_THRESHOLD = 0.55  # minimum confidence to offer inference
+
+    def infer_from_context(self, query: str,
+                           user_model_text: str,
+                           beliefs: list) -> Optional[str]:
+        """Return inference note if a high-probability answer exists.
+
+        Returns a string to inject into system prompt, or None.
+        """
+        query_l = query.lower()
+        notes = []
+
+        # Check if query asks about something inferable from session context
+        if not user_model_text and not beliefs:
+            return None
+
+        # Son/family member preference inference
+        if re.search(r"\b(?:son|daughter|wife|husband|child)\b.{0,20}\b(?:like|eat|prefer|enjoy|hate)\b", query_l):
+            # Look for "similar tastes" or family preference signals in user model
+            if "similar taste" in user_model_text.lower():
+                notes.append(
+                    "The user mentioned a family member has similar tastes to theirs. "
+                    "You can infer their preference is likely similar to what the user "
+                    "has disclosed, but state this as a low-confidence inference.")
+
+        # Role/position inference
+        if re.search(r"\b(?:what|which) (?:role|position|rank|level)\b", query_l):
+            if any("sbi" in b.get('label','').lower() for b in beliefs):
+                notes.append(
+                    "The user works at SBI. You can make calibrated inferences "
+                    "about their likely role based on what they have disclosed, "
+                    "but mark inferences as tentative.")
+
+        if notes:
+            return ("When answering, if you can make a reasonable inference from "
+                    "what the user has told you, do so — but state it as an inference "
+                    "with your confidence level. Example: 'Based on what you've told "
+                    "me, I'd guess X — though I could be wrong.' "
+                    "Do not refuse to infer when context makes a reasonable answer possible. "
+                    + " ".join(notes))
+        return None
 
 # ===========================================================================
 # SOFT INTENT CLASSIFIER (FM-69, FM-75)
@@ -1504,6 +1614,7 @@ class MnemosLite:
         self.register_clf  = ConversationalRegister()       # FM-100
         self.social        = SocialStateTracker()           # FM-102/103/104/106/108
         self.synthesizer   = SessionSynthesizer(self.long_term)  # FM-105/107/94
+        self.inferencer    = CalibratedInferencer()             # FM-105
 
         self._session_id:        str  = ""
         self._namespace_cap:     int  = namespace_cap
@@ -1532,6 +1643,16 @@ class MnemosLite:
                    alpha: float = 2.0, beta: float = 1.0,
                    source_text: str = "", immutable: bool = False) -> Belief:
         self._register_namespace(ns)
+
+        # FM-109: detect persona/role instructions and route to synthesizer
+        full_content = content or (f"{trait}={value}" if trait and value else "")
+        if is_persona_instruction(full_content):
+            self.synthesizer._facts.append(f"Session role: {full_content[:80]}")
+            if hasattr(self.long_term, "_session_facts"):
+                self.long_term._session_facts = list(self.synthesizer._facts)
+            # Still store as belief for audit, but mark as IDENTITY domain
+            domain = Domain.IDENTITY
+
         b = Belief(
             content=content, trait=trait, value=value,
             context=context, exceptions=exceptions or [],
@@ -1562,7 +1683,15 @@ class MnemosLite:
 
         self.episodic.write("user", query, self._session_id, namespace)
 
-        beliefs     = self.graph.search(query, namespace=namespace, top_k=8)
+        # FM-94/FM-110: for identity/belief queries, retrieve all beliefs across namespaces
+        if is_identity_query(query) or is_belief_query(query):
+            beliefs = self.graph.all_beliefs()[:15]  # no namespace filter
+            id_beliefs = self.identity.get(namespace)
+            for ib in id_beliefs:
+                if ib not in beliefs:
+                    beliefs.append(ib)
+        else:
+            beliefs = self.graph.search(query, namespace=namespace, top_k=8)
         constraints = self.graph.search(query, domain=Domain.CONSTRAINT, top_k=5)
         immune      = [b for b in self.graph.all_beliefs(namespace)
                        if b.is_truth_immune and b not in constraints]
@@ -1580,11 +1709,20 @@ class MnemosLite:
         # FM-100: conversational register
         is_casual     = self.register_clf.is_casual(query)
         # FM-104: social state update
-        topic_key     = self.interaction._topic_key(query)
+        topic_key      = self.interaction._topic_key(query)
         self.social.update(query, topic_key)
         # FM-107: session synthesis
         self.synthesizer.ingest(query, role="user")
         self.synthesizer.maybe_update(self._turn_count)
+        # FM-94/FM-109: identity query detection
+        identity_query = is_identity_query(query)
+        # FM-110: belief query detection
+        belief_query   = is_belief_query(query)
+        # FM-105: calibrated inference — force synthesize before checking
+        self.synthesizer.maybe_update(self._turn_count)
+        infer_note     = self.inferencer.infer_from_context(
+            query, self.synthesizer.user_model(),
+            [self._belief_summary(b) for b in self.graph.all_beliefs()])
 
         cb_ok = self.check_budget.available()
         should_intervene, intervene_reason = self.intervention.should_intervene(
@@ -1647,6 +1785,9 @@ class MnemosLite:
             "social_notes":     self.social.system_notes(),
             "social_state":     self.social.state_summary(),
             "user_model":       self.synthesizer.user_model(),
+            "identity_query":   identity_query,
+            "belief_query":     belief_query,
+            "infer_note":       infer_note or "",
         }
         return context_packet, validation
 

@@ -131,6 +131,26 @@ def build_memory_context(context_packet: dict, validation: dict) -> str:
     for note in validation.get("social_notes", []):
         lines.append(f"Interaction signal: {note}")
 
+    # FM-94/FM-109: identity query — inject full identity context
+    if validation.get("identity_query"):
+        lines.append(
+            "Identity signal: The user is asking about themselves or their own identity. "
+            "Use ALL beliefs and the user model above to answer as completely as possible. "
+            "If you have a persona instruction in the user model (e.g. 'Session role: ...'), "
+            "use it to answer 'Who am I?' type questions directly.")
+
+    # FM-110: belief query — inject belief-awareness instruction
+    if validation.get("belief_query"):
+        lines.append(
+            "Belief signal: The user is asking about what they themselves believe or prefer. "
+            "Check the beliefs and constraints listed above and answer based on what has been "
+            "stored. If a matching belief exists, confirm it clearly rather than being evasive.")
+
+    # FM-105: calibrated inference note
+    infer_note = validation.get("infer_note", "")
+    if infer_note:
+        lines.append(f"Inference signal: {infer_note}")
+
     lines.append("[END MEMORY CONTEXT]\n")
 
     # FM-105/107: user model (injected before memory context)
