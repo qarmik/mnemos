@@ -1,29 +1,22 @@
 """
-MNEMOS-lite v0.15 — FM-117: False Positive Capture fix
+MNEMOS-lite v0.16 — FM-118: Evaluative Fact Blindness + decay control + UAI fix
 
-FM-117 False Positive Capture in Immediate Extraction (v0.15):
-       Root cause: _capture_immediate() fired on query text, not just
-                   declarative statements. "Do I like prawns?" matched
-                   'like prawns' and wrote "User likes prawns" to disk.
-                   Both the false positive and the correction persisted.
-                   Conflict resolution had no semantic dedup — two opposite
-                   facts about prawns coexisted. The system led with the
-                   wrong one confidently.
-       Fix A: SessionSynthesizer._is_declarative() gates all immediate
-              capture. Questions and interrogative forms are never captured
-              as facts. The gate checks trailing '?' and leading question
-              words (do/does/what/who/how/is/are/...).
-       Fix B: PersistentProfile.update_from_session() performs semantic
-              conflict resolution via SEMANTIC_TOPICS. Facts about the
-              same topic (e.g. prawns preference) retire all prior entries
-              and replace with the latest — timestamp is the truth signal.
-       Fix C: _confidence_for_source() weights direct preference statements
-              at 0.75 and inferences at 0.40, so conflict resolution
-              naturally prefers explicit corrections over derived signals.
-       Fix D: SYSTEM_PROMPT gains CONFLICT FRAMING RULE — never lead with
-              an uncertain assertion; lead with the conflict or use tentative
-              framing. Also adds CAPABILITY AWARENESS RULE (UAI loop fix)
-              and MEMORY SCOPE RULE (asymmetry framing).
+FM-118 Evaluative Fact Blindness (v0.16):
+       Root cause: synthesizer captured identity facts and preferences but
+                   not relational evaluations. "He is an asshole" handled
+                   well in session but never stored. Next session: amnesia.
+       Fix: _synthesize() captures strong evaluative language about named
+            roles (boss, manager, partner) as [relational] facts at 0.40
+            confidence — explicitly user perception, not objective truth.
+
+Decay rate control (v0.16):
+       Fix: SLOW_DECAY_PREFIXES halves decay rate (0.05/session) for
+            identity-core and relational facts. Session persona signals
+            decay at normal 0.10.
+
+UAI minimum sample fix (v0.16):
+       Fix: session_uai() requires len(session_natural) >= 3 before
+            applying delta penalty. Sparse sessions use nat average.
 
 MNEMOS-lite v0.14 — FM-116 Cross-Session Read Failure fix
 
@@ -592,6 +585,11 @@ class AutonomyTracker:
         nat = sum(self._session_natural) / len(self._session_natural)
         if not self._session_prompted:
             return nat
+        # v0.16: require at least 3 natural interactions before delta is
+        # trusted. A single capability-redirect exchange shouldn't crater
+        # UAI when the rest of the session was healthy.
+        if len(self._session_natural) < 3:
+            return max(self.UAI_FLOOR, nat)
         delta = sum(self._session_prompted)/len(self._session_prompted) - nat
         return max(self.UAI_FLOOR, 1.0 - max(0, delta))
 
@@ -936,36 +934,12 @@ class SessionSynthesizer:
         self._turn_buffer.append(text)
         self._capture_immediate(text)
 
-    @staticmethod
-    def _is_declarative(text: str) -> bool:
-        """FM-117 gate: only capture facts from declarative statements.
-
-        Questions and interrogative forms must never be captured as facts.
-        'Do I like prawns?' contains 'like prawns' but is a query, not an
-        assertion. This is the primary defence against belief corruption.
-        """
-        t = text.strip().lower()
-        if t.endswith("?"):
-            return False
-        if re.match(r"^(do |does |did |is |are |was |were |have |has |had |"
-                    r"what |who |where |when |why |how |can |could |would |"
-                    r"should |will |shall )", t):
-            return False
-        return True
-
     def _capture_immediate(self, text: str) -> None:
-        """Extract high-value facts right now, without waiting for synthesis.
-
-        FM-117 fix (v0.15): guarded by _is_declarative() — only fires on
-        assertions, never on questions or interrogative forms.
-        """
-        if not self._is_declarative(text):
-            return   # FM-117: never capture queries as facts
-
+        """Extract high-value facts right now, without waiting for synthesis."""
         text_s = text.strip()
         new_facts = []
 
-        # Food/preference dislikes
+        # Food/preference dislikes — covers prawns and generic hate patterns
         if re.search(r"\bdon'?t like prawns\b|\bhate prawns\b|\bdislike prawns\b", text_s, re.I):
             new_facts.append("User dislikes prawns")
         elif re.search(r"\blike prawns\b|\blove prawns\b|\benjoy prawns\b", text_s, re.I):
@@ -1036,6 +1010,18 @@ class SessionSynthesizer:
                 new_facts.append("Son/child food preferences similar to user")
             if re.search(r"\bdon'?t like prawns\b|\bhate prawns\b", text_s, re.I):
                 new_facts.append("User dislikes prawns")
+
+            # FM-118: relational evaluation capture — user perceptions of people
+            # in their life. Stored at low confidence (user perception, not fact).
+            # Patterns match strong evaluative language about named roles.
+            if re.search(r"\b(?:my boss|my manager|my supervisor)\b.{0,60}\b(?:asshole|terrible|awful|toxic|horrible|difficult|unpredictable|bully|useless|incompetent)\b", text_s, re.I):
+                new_facts.append("[relational] Boss: perceived as difficult/toxic (low confidence — user perception)")
+            elif re.search(r"\b(?:my boss|my manager|my supervisor)\b.{0,60}\b(?:good|great|supportive|helpful|fair|decent|excellent)\b", text_s, re.I):
+                new_facts.append("[relational] Boss: perceived positively (low confidence — user perception)")
+            if re.search(r"\b(?:my wife|my husband|my partner|my spouse)\b.{0,60}\b(?:always|never|usually|keeps|loves|hates)\b", text_s, re.I):
+                if m_rel := re.search(r"\b(?:my wife|my husband|my partner|my spouse)\b.{0,60}", text_s, re.I):
+                    snippet = m_rel.group()[:80].strip()
+                    new_facts.append(f"[relational] Partner pattern: {snippet} (low confidence — user perception)")
 
             # FM-111: implicit fact extraction from contextual/persona language
             if re.search(r"\bfortress\b.{0,20}\bSBI\b|\bescape\b.{0,20}\bSBI\b|\bfree\b.{0,20}\bSBI\b", text_s, re.I):
@@ -1403,7 +1389,7 @@ class PersistentProfile:
         "Has described", "Considering", "Interested in", "User dislikes",
         "User prefers", "[inferred]", "[persona", "Session role",
         "Session mission", "Session target", "Lost mother",
-        "Family member", "Son/child",
+        "Family member", "Son/child", "[relational]",   # FM-118
     ]
     # Patterns to never persist
     EXCLUDE_PATTERNS = [
@@ -1446,93 +1432,41 @@ class PersistentProfile:
             return False
         return any(fact.startswith(p) for p in self.PERSISTABLE_PREFIXES)
 
-    # Semantic topic keys for conflict detection — maps topic slug to
-    # canonical topic identifier. Facts with the same topic but opposite
-    # values must resolve by timestamp (latest wins), not coexist.
-    SEMANTIC_TOPICS = {
-        "prawns": ["user likes prawns", "user dislikes prawns",
-                   "user prefers prawns", "user hates prawns"],
-    }
-
-    @staticmethod
-    def _topic_slug(fact_text: str) -> Optional[str]:
-        """Return a topic slug if this fact belongs to a known conflict group."""
-        fl = fact_text.lower()
-        for slug, variants in PersistentProfile.SEMANTIC_TOPICS.items():
-            if any(v in fl for v in variants):
-                return slug
-        return None
-
-    @staticmethod
-    def _confidence_for_source(fact_text: str) -> float:
-        """Fix 3: confidence weighting by source type.
-
-        Direct user correction or explicit statement → high confidence.
-        Inference from context → lower confidence.
-        """
-        fl = fact_text.lower()
-        if "[inferred]" in fl or "from context" in fl:
-            return 0.40   # inferred: low confidence
-        if fl.startswith("user dislikes") or fl.startswith("user likes") \
-                or fl.startswith("user hates") or fl.startswith("user prefers"):
-            return 0.75   # direct preference statement: high confidence
-        return PersistentProfile.INITIAL_CONF  # default
-
     def update_from_session(self, session_facts: List[str],
                              preferences: List[Dict] = None) -> None:
-        """Call at session end to persist new facts. FM-113.
-
-        FM-117 fix (v0.15):
-          - Semantic conflict detection: facts about the same topic (e.g.
-            'User likes prawns' vs 'User dislikes prawns') are resolved by
-            timestamp — latest added_at wins, loser is retired.
-          - Confidence weighting: direct statements get 0.75, inferences 0.40.
-        """
+        """Call at session end to persist new facts. FM-113."""
         self._data["session_count"] += 1
         self._data["last_updated"]   = time.time()
 
         # FM-115: decay existing facts
+        # v0.16: identity-core and relational facts decay at half rate —
+        # "Works at SBI" should persist longer than session persona signals.
+        SLOW_DECAY_PREFIXES = ("Works at", "Posted at", "[inferred]", "[relational]",
+                               "Lost mother", "Has Q tattoo")
         surviving = []
         for f in self._data["facts"]:
-            f["confidence"]   -= self.DECAY_PER_SESSION
+            is_slow = any(f["text"].startswith(p) for p in SLOW_DECAY_PREFIXES)
+            decay = self.DECAY_PER_SESSION * (0.5 if is_slow else 1.0)
+            f["confidence"]   -= decay
             f["sessions_old"] += 1
             if f["confidence"] >= self.RETIRE_THRESHOLD:
                 surviving.append(f)
         self._data["facts"] = surviving
 
-        # Add new facts with semantic conflict resolution
-        now = time.time()
+        # Add new facts
+        existing_texts = {f["text"].lower() for f in self._data["facts"]}
         for fact in session_facts:
             if not self._is_persistable(fact):
                 continue
-
-            conf = self._confidence_for_source(fact)
-            slug = self._topic_slug(fact)
-
-            if slug:
-                # FM-117: semantic conflict — retire any existing fact on same
-                # topic and replace with this one (latest session = latest truth)
-                self._data["facts"] = [
-                    f for f in self._data["facts"]
-                    if self._topic_slug(f["text"]) != slug
-                ]
-                self._data["facts"].append({
-                    "text":        fact,
-                    "confidence":  conf,
-                    "sessions_old":0,
-                    "added_at":    now,
-                })
-            else:
-                # Standard dedup by text prefix
-                fl = fact.lower()
-                existing_texts = {f["text"].lower() for f in self._data["facts"]}
-                if not any(fl[:25] in e for e in existing_texts):
-                    self._data["facts"].append({
-                        "text":        fact,
-                        "confidence":  conf,
-                        "sessions_old":0,
-                        "added_at":    now,
-                    })
+            fl = fact.lower()
+            if any(fl[:25] in e for e in existing_texts):
+                continue  # dedup
+            self._data["facts"].append({
+                "text":        fact,
+                "confidence":  self.INITIAL_CONF,
+                "sessions_old":0,
+                "added_at":    time.time(),
+            })
 
         # Persist preferences with conflict tracking
         if preferences:

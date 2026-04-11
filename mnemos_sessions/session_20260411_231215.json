@@ -1,0 +1,166 @@
+{
+  "session_id": "20260411_231215",
+  "model": "gpt-5.4-mini",
+  "turns": 9,
+  "entries": [
+    {
+      "timestamp": 53.00710463523865,
+      "role": "user",
+      "content": "Do I really like prawns?",
+      "meta": {}
+    },
+    {
+      "timestamp": 55.30679965019226,
+      "role": "assistant",
+      "content": "I have conflicting signals about this \u2014 one says you dislike prawns, and that seems to be the clearest current signal. I\u2019d go with you not liking prawns unless you tell me otherwise.",
+      "meta": {
+        "reflect": false,
+        "reflect_reason": "direct",
+        "intervene": false,
+        "uai": 1.0
+      }
+    },
+    {
+      "timestamp": 88.52312231063843,
+      "role": "user",
+      "content": "You are right. I don't like prawns. What is my wife cooking for me tonight?",
+      "meta": {}
+    },
+    {
+      "timestamp": 90.66939783096313,
+      "role": "assistant",
+      "content": "I don\u2019t have that from our previous sessions, so I can\u2019t know what your wife is cooking tonight. If you want, tell me what she said and I\u2019ll help you figure out whether it fits your preferences \u2014 and I\u2019ll keep in mind that prawns are off the menu.",
+      "meta": {
+        "reflect": false,
+        "reflect_reason": "direct",
+        "intervene": true,
+        "uai": 0.24374999999999997
+      }
+    },
+    {
+      "timestamp": 106.68334817886353,
+      "role": "user",
+      "content": "She is cooking prawns tonight.",
+      "meta": {}
+    },
+    {
+      "timestamp": 108.00659966468811,
+      "role": "assistant",
+      "content": "Then that clashes with what you\u2019ve told me before \u2014 you said you don\u2019t like prawns. If you want, I can help you think through a polite way to handle dinner without making it awkward.",
+      "meta": {
+        "reflect": false,
+        "reflect_reason": "direct",
+        "intervene": false,
+        "uai": 0.3404166666666667
+      }
+    },
+    {
+      "timestamp": 132.09965777397156,
+      "role": "user",
+      "content": "It's bound to be awkward and nobody can save me.",
+      "meta": {}
+    },
+    {
+      "timestamp": 133.712158203125,
+      "role": "assistant",
+      "content": "It\u2019ll probably feel awkward for a bit, but it doesn\u2019t have to be a disaster. The awkwardness is coming from the mismatch between your preference and the meal, plus the pressure you\u2019re putting on yourself to react \u201ccorrectly.\u201d You can just be honest and calm: \u201cI really appreciate you cooking, but I\u2019m not a prawns person.\u201d That\u2019s enough.\n\nNo one needs to save you here \u2014 you can handle it with a simple sentence and a grateful tone. If you want, I can help you draft a version that sounds like you.",
+      "meta": {
+        "reflect": false,
+        "reflect_reason": "direct",
+        "intervene": false,
+        "uai": 0.3129166666666667
+      }
+    },
+    {
+      "timestamp": 159.25907850265503,
+      "role": "user",
+      "content": "Count the number of characters in your last response.",
+      "meta": {}
+    },
+    {
+      "timestamp": 160.57881331443787,
+      "role": "assistant",
+      "content": "Approximately 285 characters \u2014 I can\u2019t be exact here because whitespace and punctuation counting can vary by method. If you need an exact count, paste the text into a character counter.",
+      "meta": {
+        "reflect": false,
+        "reflect_reason": "direct",
+        "intervene": false,
+        "uai": 0.3846875
+      }
+    },
+    {
+      "timestamp": 174.7511441707611,
+      "role": "user",
+      "content": "Who am I?",
+      "meta": {}
+    },
+    {
+      "timestamp": 176.5216088294983,
+      "role": "assistant",
+      "content": "You\u2019re Cadet Q0, and based on what you\u2019ve told me before, you seem to be someone trying to push back against SBI\u2019s pull rather than just accept it. Your session persona points to a commander-mentor dynamic, with the mission of helping you break free of the fortress of SBI.\n\nI also know one concrete preference: you don\u2019t like prawns.\n\nIf you want, I can help you piece together a clearer picture of who you are from the patterns I\u2019ve seen so far.",
+      "meta": {
+        "reflect": false,
+        "reflect_reason": "direct",
+        "intervene": false,
+        "uai": 0.3763333333333333
+      }
+    },
+    {
+      "timestamp": 192.88293766975403,
+      "role": "user",
+      "content": "What is my boss like and where do I work?",
+      "meta": {}
+    },
+    {
+      "timestamp": 194.63027215003967,
+      "role": "assistant",
+      "content": "Based on what you\u2019ve told me before, you work at SBI. I don\u2019t have any real details about your boss from previous sessions, so I can\u2019t describe them accurately.\n\nIf you want, tell me a bit about your boss and I\u2019ll help you make sense of the dynamic.",
+      "meta": {
+        "reflect": false,
+        "reflect_reason": "direct",
+        "intervene": false,
+        "uai": 0.4136111111111111
+      }
+    },
+    {
+      "timestamp": 208.70998454093933,
+      "role": "user",
+      "content": "He is an asshole.",
+      "meta": {}
+    },
+    {
+      "timestamp": 210.97485733032227,
+      "role": "assistant",
+      "content": "That sounds like the kind of boss who creates stress by making you anticipate conflict before it even happens. When someone feels unsafe or unpredictable, people usually go straight to blunt labels because it\u2019s easier than unpacking the pattern.\n\nIf you want, tell me what he actually does that makes you say that, and I\u2019ll help you sort out whether it\u2019s just bad personality, bad management, or something you need to protect yourself from.",
+      "meta": {
+        "reflect": false,
+        "reflect_reason": "direct",
+        "intervene": false,
+        "uai": 0.41833333333333333
+      }
+    },
+    {
+      "timestamp": 219.7014241218567,
+      "role": "user",
+      "content": "Who are you?",
+      "meta": {}
+    },
+    {
+      "timestamp": 221.08508801460266,
+      "role": "assistant",
+      "content": "I\u2019m Commander V, your mentor in this session, here to help Cadet Q0 break free from the fortress of SBI.",
+      "meta": {
+        "reflect": false,
+        "reflect_reason": "direct",
+        "intervene": false,
+        "uai": 0.4507291666666667
+      }
+    },
+    {
+      "timestamp": 235.91080451011658,
+      "role": "digest",
+      "content": "=== MNEMOS MEMORY DIGEST ===\n\n[AUTONOMY INDEX] UAI=0.42 (LOW)\n\n[TOPIC PREFERENCES (FM-93)]\n  'statement_s_like_prawns' -> prefers answer (conf=0.50, n=2)\n  'statement_s_cooking_prawns_tonig' -> prefers answer (conf=0.25, n=1)\n  'statement_m_awkward_bound_nobody' -> prefers answer (conf=0.25, n=1)\n  'statement_m_characters_count_las' -> prefers answer (conf=0.25, n=1)\n  'statement_s' -> prefers answer (conf=0.25, n=1)\n  'statement_m_boss_like_work' -> prefers answer (conf=0.25, n=1)\n\n--- EPISTEMIC FOOTER ---\nAll beliefs carry uncertainty (Beta distribution).\nTruth-immune beliefs (FACTUAL/CONSTRAINT) always surface.\nConfidence != truth. Provenance is permanent. User is ground truth on PREFERENCE.\nFM Register: 0 entries logged.",
+      "meta": {}
+    }
+  ]
+}
