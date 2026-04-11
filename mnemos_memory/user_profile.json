@@ -1,70 +1,76 @@
 {
   "version": "0.12",
-  "last_updated": 1775950262.1638389,
-  "session_count": 6,
+  "last_updated": 1775951352.3624322,
+  "session_count": 7,
   "facts": [
     {
-      "text": "[inferred] Works at SBI (from context)",
-      "confidence": 0.3000000000000001,
-      "sessions_old": 5,
-      "added_at": 1775927295.418668
-    },
-    {
-      "text": "[inferred] User is Cadet Q0",
-      "confidence": 0.3000000000000001,
-      "sessions_old": 5,
-      "added_at": 1775927295.4186711
-    },
-    {
       "text": "Session role: commander v",
-      "confidence": 0.55,
-      "sessions_old": 1,
+      "confidence": 0.45000000000000007,
+      "sessions_old": 2,
       "added_at": 1775949120.6253257
     },
     {
       "text": "Session mission: help cader q0 break free from the fortress of sbi.",
-      "confidence": 0.55,
-      "sessions_old": 1,
+      "confidence": 0.45000000000000007,
+      "sessions_old": 2,
       "added_at": 1775949120.6253257
     },
     {
       "text": "Session target user: the user",
-      "confidence": 0.55,
-      "sessions_old": 1,
+      "confidence": 0.45000000000000007,
+      "sessions_old": 2,
       "added_at": 1775949120.6253257
     },
     {
       "text": "[relational] Partner pattern: My wife often cooks prawns. (low confidence — user perception)",
-      "confidence": 0.35000000000000003,
-      "sessions_old": 1,
+      "confidence": 0.30000000000000004,
+      "sessions_old": 2,
       "added_at": 1775949120.6253257
     },
     {
       "text": "Boss context: My boss is an asshole.",
-      "confidence": 0.55,
-      "sessions_old": 1,
+      "confidence": 0.45000000000000007,
+      "sessions_old": 2,
       "added_at": 1775949120.6253257
     },
     {
       "text": "[relational] Boss: perceived as difficult/toxic (low confidence — user perception)",
-      "confidence": 0.35000000000000003,
-      "sessions_old": 1,
+      "confidence": 0.30000000000000004,
+      "sessions_old": 2,
       "added_at": 1775949120.6253257
     },
     {
       "text": "[persona mission] mission is to help Cadet Q0 break free from the fortress of SBI.",
-      "confidence": 0.65,
-      "sessions_old": 0,
+      "confidence": 0.55,
+      "sessions_old": 1,
       "added_at": 1775950262.1638622
+    },
+    {
+      "text": "[inferred] User is Cadet Q0",
+      "confidence": 0.4,
+      "sessions_old": 0,
+      "added_at": 1775951352.3624692
+    },
+    {
+      "text": "User dislikes prawns",
+      "confidence": 0.75,
+      "sessions_old": 0,
+      "added_at": 1775951352.3624692
     }
   ],
   "preferences": [
     {
       "key": "prawns_preference",
-      "value": "like",
-      "confidence": 0.9,
-      "conflicts": 0,
-      "history": []
+      "value": "dislike",
+      "confidence": 0.8,
+      "conflicts": 1,
+      "history": [
+        {
+          "old_value": "like",
+          "new_value": "dislike",
+          "timestamp": 1775951352.3626006
+        }
+      ]
     }
   ],
   "identity": {}
