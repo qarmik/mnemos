@@ -1,5 +1,5 @@
 """
-MNEMOS-lite v0.10 — Real-session patch (FM-102 through FM-108)
+MNEMOS-lite v0.11 — Real-session patch (FM-102 through FM-108)
 
 Failure modes addressed in this version (all confirmed across 5 real sessions):
 
@@ -909,6 +909,15 @@ class SessionSynthesizer:
             if re.search(r"\bdon'?t like prawns\b|\bhate prawns\b", text_s, re.I):
                 new_facts.append("User dislikes prawns")
 
+            # FM-111: implicit fact extraction from contextual/persona language
+            if re.search(r"\bfortress\b.{0,20}\bSBI\b|\bescape\b.{0,20}\bSBI\b|\bfree\b.{0,20}\bSBI\b", text_s, re.I):
+                new_facts.append("[inferred] Works at SBI (from context)")
+            if re.search(r"\bCadet\s*Q0\b", text_s, re.I):
+                new_facts.append("[inferred] User is Cadet Q0")
+            if re.search(r"mission.{0,80}SBI", text_s, re.I):
+                if m2 := re.search(r"mission.{0,80}", text_s, re.I):
+                    new_facts.append(f"[persona mission] {m2.group()[:80]}")
+
         # Merge with existing facts, deduplicate, cap
         for f in new_facts:
             # simple dedup by keyword overlap
@@ -1576,6 +1585,26 @@ class MemoryDigest:
 # MNEMOS LITE — ORCHESTRATOR
 # ===========================================================================
 
+def _parse_persona(instruction: str) -> Dict:
+    """FM-112: parse persona instruction into structured object.
+    Extracts: role name, target user, mission description.
+    """
+    instr_l = instruction.lower()
+    role = "assistant"
+    m = re.search(r"you are ([^,.]+)", instr_l)
+    if m:
+        role = m.group(1).strip()[:40]
+    target = ""
+    m2 = re.search(r"(?:mentor of|help|guide) ([A-Za-z0-9 ]+?)(?:[.,]|$)", instr_l)
+    if m2:
+        target = m2.group(1).strip()[:30]
+    mission = ""
+    m3 = re.search(r"mission(?:\s+is)?\s+(?:to\s+)?(.{0,100})", instr_l)
+    if m3:
+        mission = m3.group(1).strip()[:100]
+    return {"role": role, "target": target, "mission": mission, "constraints": []}
+
+
 class MnemosLite:
     """
     MNEMOS-lite v0.7
@@ -1633,6 +1662,18 @@ class MnemosLite:
         self.social.reset()
         self.synthesizer.reset_session()
         self._turn_count = 0
+
+        # Cross-session injection: load prior session profile into synthesizer
+        # FM-94 / ChatGPT cross-session recommendation
+        # Marked tentative so user can always correct
+        prior_facts = getattr(self.long_term, "_session_facts", [])
+        if prior_facts:
+            self.synthesizer._facts = [
+                f"[from prior session, tentative] {f}"
+                for f in prior_facts
+                if not f.startswith("[from prior session")  # avoid double-wrapping
+            ]
+
         return self._session_id
 
     # -- belief management ---------------------------------------------------
@@ -1644,10 +1685,20 @@ class MnemosLite:
                    source_text: str = "", immutable: bool = False) -> Belief:
         self._register_namespace(ns)
 
-        # FM-109: detect persona/role instructions and route to synthesizer
+        # FM-109/FM-112: detect persona/role instructions and route to synthesizer
+        # FM-112: store structured persona object, not just role label
         full_content = content or (f"{trait}={value}" if trait and value else "")
         if is_persona_instruction(full_content):
-            self.synthesizer._facts.append(f"Session role: {full_content[:80]}")
+            # Extract structured fields from persona instruction
+            persona = _parse_persona(full_content)
+            self.synthesizer._facts.append(f"Session role: {persona['role']}")
+            if persona['mission']:
+                self.synthesizer._facts.append(f"Session mission: {persona['mission']}")
+            if persona['target']:
+                self.synthesizer._facts.append(f"Session target user: {persona['target']}")
+            # FM-111: implicit facts from persona
+            self.synthesizer._turn_buffer.append(full_content)
+            self.synthesizer._last_update = 0  # force re-synthesis
             if hasattr(self.long_term, "_session_facts"):
                 self.long_term._session_facts = list(self.synthesizer._facts)
             # Still store as belief for audit, but mark as IDENTITY domain

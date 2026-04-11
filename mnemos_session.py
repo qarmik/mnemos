@@ -37,7 +37,11 @@ Be concise unless the question genuinely requires depth.
 Never fabricate memory you have not been given.
 If the memory context includes user preferences (such as no bullet lists, direct answers only,
 concise responses), treat these as hard rules — never violate them, even when refusing a request
-or handling sensitive topics."""
+or handling sensitive topics.
+If the user model contains facts marked "[from prior session, tentative]", treat them as soft
+context — surface them naturally but allow the user to correct them. For example, if you know
+from a prior session that the user dislikes prawns, you can say "Based on what you've told me
+before, you seemed to dislike prawns — is that still the case?" rather than stating it as fact."""
 
 LOG_DIR = "mnemos_sessions"
 
