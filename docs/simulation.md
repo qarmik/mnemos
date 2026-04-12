@@ -56,7 +56,7 @@ Avoidant persona: 1 reflection trigger (T01, first contact — correct behavior,
 
 The 3 remaining failures were all medium-severity, all at the boundary of what scripted simulation can distinguish. They were correctly identified as FM-87 / FM-93 tension: re-entry firing on a topic where the user had already demonstrated a preference for direct answers.
 
-### v0.7 — FM-93: Preference-Blind Re-entry (FM-93)
+### v0.7 — FM-93: Preference-Blind Re-entry
 **0 annoying failures. 0 wrong.**
 
 Root cause of remaining v0.6 failures: FM-87 (learned helplessness re-entry) had no awareness of per-topic mode preference. It would fire after 7 direct answers regardless of whether the user had consistently preferred direct answers on that topic.
@@ -95,18 +95,16 @@ The three-persona simulation uses scripted queries with clean intent. Real human
 - **Contextually loaded** — what you say depends on what happened an hour ago, not just this session
 - **Contradictory** — humans say one thing and mean another, or change their mind mid-query
 
-FM-94+ will only appear in real sessions. The simulation got the system to zero scripted failures. That's what it can do. The rest requires walking the terrain.
+FM-94+ appeared only in real sessions. The simulation got the system to zero scripted failures. That is what simulation can do. The rest required walking the terrain — 16 real sessions, FM-94 through FM-121, all documented in `where_mnemos_misreads_humans.md` and `failure_modes.md`.
 
 ---
 
-## FM-94 candidate (pre-real-session analysis)
+## What happened after v0.7
 
-**Slow preference signal accumulation on varied same-topic queries.**
+Simulation ended here. Real sessions began.
 
-When a user asks varied questions about the same underlying topic (e.g., different aspects of project scope management), each question gets a slightly different topic key via the FM-88 clustering algorithm. The preference signal therefore accumulates slowly — `n` per key stays low, confidence stays at 0.25, and the FM-93 gate (which requires ≥0.65) never activates in the relevant window.
+The v0.4–v0.7 simulation arc reduced scripted failures from 10 to 0 across three scripted personas. This confirmed the interaction logic was architecturally sound. What it could not test: cross-session memory, identity persistence under pressure, preference drift over 20+ turns, graph state integrity, or any of the failures that require genuine human ambiguity to surface.
 
-The FM-88 clustering handles paraphrasing well (recency window catches same-idea rewording). But it doesn't handle thematic variation — related questions that share a domain rather than shared words.
+Sessions 1–16 (v0.7 through v0.20) are documented in `where_mnemos_misreads_humans.md`. The FM Register grew from FM-93 to FM-121 across those sessions. Every failure was a calibration failure, not a correctness failure. The system never gave a wrong answer. It gave answers that were correct at the wrong time, in the wrong tone, with the wrong memory state — and those failures turned out to be harder to fix than correctness would have been.
 
-Proposed fix direction: semantic similarity component alongside lexical overlap in `_topic_key()`. Requires real sessions to validate whether this is the actual pattern.
-
-Status: **candidate**. Not implemented. Waiting for real-session observation.
+The final system state after Session 16: graph integrity clean, temporal consistency stable, UAI healthy across 7 consecutive sessions, all critical FMs closed. FM-122 is waiting in the next real session.

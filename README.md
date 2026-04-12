@@ -165,9 +165,9 @@ The constitution of MNEMOS. No layer may violate them.
 
 ---
 
-## The 14 Layers
+## The 17 Layers
 
-*MNEMOS is layered for clarity, but not all layers are equally mature. For current behavior, focus on L0–L4, L9, L12–L15.*
+*MNEMOS has 17 layers (L0 through L16), not all equally mature. For current behavior, focus on L0–L4, L9, L12–L15.*
 
 | Layer | Name | Job | Status |
 |-------|------|-----|--------|
