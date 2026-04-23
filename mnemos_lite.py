@@ -2258,6 +2258,13 @@ class MnemosLite:
         for fact in self.synthesizer._facts:
             for pattern, trait, value, domain, context in FACT_TO_BELIEF:
                 if _re.search(pattern, fact, _re.I):
+                    # Do not overwrite a belief that was written by
+                    # _hard_write_preference (confidence >= 0.80).
+                    # The explicit correction always wins over synthesizer inference.
+                    existing = [b for b in self.graph.all_beliefs()
+                                if b.trait == trait]
+                    if any(b.confidence >= 0.80 for b in existing):
+                        break  # high-confidence truth exists — do not overwrite
                     b = Belief(
                         trait=trait, value=value, content=fact[:60],
                         domain=domain, namespace=namespace,
@@ -2363,6 +2370,7 @@ class MnemosLite:
             namespace: str = "default") -> Tuple[Dict, Dict]:
         self._turn_count += 1
         cache_key = f"{namespace}:{query[:50]}"
+        self._last_namespace = namespace  # track for save_session and corrections
 
         # FM-119 (v0.17): normalize persona name references before any processing
         canonical_query = self._canonicalize_query(query)
@@ -2502,7 +2510,10 @@ class MnemosLite:
         # Force final synthesis of any buffered turns
         self.synthesizer._synthesize()
         # v0.21 Fix 3: promote any newly synthesized facts to graph before save
-        self._promote_synthesizer_facts_to_graph(namespace="personal")
+        # Use the last active namespace from the session, defaulting to "personal"
+        self._promote_synthesizer_facts_to_graph(
+            namespace=getattr(self, "_last_namespace", "personal")
+        )
 
         session_facts = list(self.synthesizer._facts)
         # Also add any long_term facts
