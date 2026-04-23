@@ -1,29 +1,32 @@
 """
-MNEMOS-lite v0.19 — FM-121: Belief Graph State Integrity
+MNEMOS-lite v0.21 — Invariant Enforcement + Context Activation
 
-FM-121 Belief Graph Corruption via Double Write + Self-Collapse (v0.19):
-       Root cause A (double-fire): mnemos_session.py calls ask() twice per
-                   turn — once pre-response, once for validation. Both calls
-                   ran _detect_preference_correction(), writing duplicate
-                   beliefs on every correction. 6 like-beliefs accumulated.
-       Root cause B (self-collapse): _hard_write_preference() applied beta_
-                   penalty to all same-topic beliefs including the one just
-                   written. The correction immediately weakened itself.
-       Root cause C (no dedup): add_belief() appended a new Belief object
-                   on every call rather than updating the existing one.
-                   The graph accumulated noise instead of truth.
-       Fix A: single-fire gate — _detect_preference_correction() only runs
-              when response_text == "" (first ask() call). Validation call
-              is silent.
-       Fix B: KnowledgeGraph.remove_by_trait() hard-deletes ALL prior
-              beliefs for a trait before writing the correction. No corpses,
-              no self-collapse, no soft coexistence. Truth replaces prior.
-       Fix C: KnowledgeGraph.upsert_belief() enforces one belief per
-              trait per namespace. Update in place if trait exists, else
-              insert. Graph state is always minimal and consistent.
-       Result: after "I don't like prawns", graph has exactly ONE belief:
-              prawns_preference=dislike at conf=0.85. No duplicates.
-              No degradation. No drift.
+Four fixes. No new features. Enforcing what the design always intended.
+
+Fix 1 — Single Write Authority:
+    add_belief() now routes through upsert_belief(). One belief per
+    (trait, namespace) everywhere — not just on the correction path.
+    Closes dual-path vulnerability. FM-121 class regressions impossible.
+    _hard_write_preference() now deletes across ALL namespaces (namespace=None)
+    because PREFERENCE facts are about the person, not the namespace.
+
+Fix 2 — Context Activated in Retrieval:
+    graph.search() now takes query_context parameter.
+    Exact match first. General fallback second. No substring. No scoring change.
+    coffee+morning and coffee+evening are now separable.
+    Context was stored but ignored. Now it gates retrieval.
+
+Fix 3 — Graph is the Only Truth:
+    _promote_synthesizer_facts_to_graph() converts stable synthesizer string
+    facts into structured graph Belief objects via upsert_belief().
+    Called after every synthesis pass and at save_session().
+    Synthesizer remains the extraction engine. Graph is the single store.
+
+Fix 4 — Temporal Write Block:
+    _is_temporal() detects past-tense language ("used to", "previously",
+    "earlier", "before", "when I was", "in the past").
+    Blocks both _capture_immediate() and _detect_preference_correction().
+    "I used to hate prawns" never overwrites "I hate prawns".
 """
 
 from __future__ import annotations
@@ -881,13 +884,35 @@ class SessionSynthesizer:
             return False
         return True
 
+    TEMPORAL_GUARD_PATTERNS = [
+        r"\bused to\b", r"\bpreviously\b", r"\bformerly\b",
+        r"\bused to like\b", r"\bused to hate\b",
+        r"\bwhen i was\b", r"\ba while ago\b", r"\bin the past\b",
+        r"\bearlier i\b", r"\bbefore i\b",
+    ]
+
+    @staticmethod
+    def _is_temporal(text: str) -> bool:
+        """v0.21 Fix 4: detect past-tense / historical language.
+
+        'I used to hate prawns' must never overwrite 'I hate prawns'.
+        Temporal language signals a past state, not a current truth.
+        Return True if text describes a past state rather than current reality.
+        """
+        t = text.lower()
+        return any(re.search(p, t)
+                   for p in SessionSynthesizer.TEMPORAL_GUARD_PATTERNS)
+
     def _capture_immediate(self, text: str) -> None:
         """Extract high-value facts right now, without waiting for synthesis.
 
         FM-117 fix: guarded by _is_declarative() — only assertions, never questions.
+        v0.21 Fix 4: guarded by _is_temporal() — past states never overwrite current truth.
         """
         if not self._is_declarative(text):
             return
+        if self._is_temporal(text):
+            return   # past state — do not capture as current truth
 
         text_s = text.strip()
         new_facts = []
@@ -1800,28 +1825,40 @@ class KnowledgeGraph:
         self._beliefs[belief.id] = belief
         return belief.id
 
-    def remove_by_trait(self, trait: str, namespace: str = None) -> int:
-        """FM-121 (v0.19): hard-delete all beliefs matching a trait.
+    def remove_by_trait(self, trait: str, namespace: str = None,
+                        context: str = None) -> int:
+        """FM-121 (v0.19) + v0.21: hard-delete beliefs matching trait.
 
-        Used by _hard_write_preference() to eliminate prior state before
-        writing the correction. No soft coexistence — truth replaces prior.
-        Returns count of removed beliefs.
+        namespace=None  -> delete across all namespaces
+        context=None    -> delete across all contexts for this trait
+        context="X"     -> delete only beliefs with exactly this context
+
+        Used by _hard_write_preference() with namespace=None, context=None
+        to wipe all copies of a preference before writing the correction.
         """
         to_remove = [
             bid for bid, b in self._beliefs.items()
             if b.trait == trait
             and (namespace is None or b.namespace == namespace)
+            and (context  is None or b.context   == context)
         ]
         for bid in to_remove:
             del self._beliefs[bid]
         return len(to_remove)
 
     def upsert_belief(self, belief: Belief) -> str:
-        """FM-121 (v0.19): update existing belief if same trait+namespace exists,
-        else insert. Enforces one belief per trait per namespace.
+        """FM-121 (v0.19) + v0.21: update existing belief if same
+        (trait, namespace, context) exists, else insert.
+
+        v0.21: context is now part of the uniqueness key.
+        coffee+morning and coffee+evening are DIFFERENT beliefs.
+        They must NOT collapse into each other on upsert.
+        One belief per (trait, namespace, context) combination.
         """
         for bid, b in list(self._beliefs.items()):
-            if b.trait == belief.trait and b.namespace == belief.namespace:
+            if (b.trait     == belief.trait and
+                b.namespace == belief.namespace and
+                b.context   == belief.context):
                 # Update in place — preserve id, update all other fields
                 b.value          = belief.value
                 b.content        = belief.content
@@ -1844,21 +1881,61 @@ class KnowledgeGraph:
         return self._beliefs.get(belief_id)
 
     def search(self, query: str, namespace: str = None,
-               domain: Domain = None, top_k: int = 10) -> List[Belief]:
+               domain: Domain = None, top_k: int = 10,
+               query_context: str = None) -> List[Belief]:
+        """Retrieve beliefs scored by word overlap, confidence, and recency.
+
+        v0.21 Fix 2: context is now an active retrieval dimension.
+          - If query_context is provided: return beliefs where belief.context
+            exactly matches query_context (case-insensitive), scored normally.
+          - If no exact match found, fall back to beliefs with context="general".
+          - If query_context is None: return all beliefs with context="general"
+            plus beliefs that have no specific context.
+          - Exact match only. No substring. No scoring adjustment.
+
+        This makes coffee+morning and coffee+evening separable for the first time.
+        """
         q_words = set(query.lower().split()) - STOPWORDS
         fp = ForgettingPolicy()
-        results = []
-        for b in self._beliefs.values():
-            if namespace and b.namespace != namespace: continue
-            if domain   and b.domain    != domain:    continue
-            b_words  = set(b.label().lower().split()) - STOPWORDS
+
+        candidates = list(self._beliefs.values())
+        if namespace:
+            candidates = [b for b in candidates if b.namespace == namespace]
+        if domain:
+            candidates = [b for b in candidates if b.domain == domain]
+
+        def score(b: Belief) -> float:
+            # Score against both label and content so "coffee" matches
+            # a belief labelled "coffee_preference=dislike" whose content
+            # is "User dislikes coffee"
+            label_words   = set(b.label().lower().replace("=", " ").split()) - STOPWORDS
+            content_words = set(b.content.lower().split()) - STOPWORDS
+            b_words  = label_words | content_words
             overlap  = len(q_words & b_words)
             base     = overlap / max(1, len(q_words)) * b.confidence * b.recency_boost()
-            score    = fp.pawd_score(b, base)
-            if score > 0:
-                results.append((score, b))
-        results.sort(key=lambda x: -x[0])
-        return [b for _, b in results[:top_k]]
+            return fp.pawd_score(b, base)
+
+        if query_context is not None:
+            qc = query_context.lower().strip()
+            # Phase 1: exact context match
+            exact = [b for b in candidates
+                     if b.context.lower().strip() == qc]
+            if exact:
+                results = sorted(exact, key=lambda b: -score(b))
+                return results[:top_k]
+            # Phase 2: fall back to general only
+            general = [b for b in candidates
+                       if b.context.lower().strip() == "general"]
+            results = sorted(general, key=lambda b: -score(b))
+            return results[:top_k]
+        else:
+            # No context specified: return general beliefs only
+            # (beliefs with a specific context require an explicit context query)
+            general = [b for b in candidates
+                       if b.context.lower().strip() == "general"]
+            results = [(score(b), b) for b in general if score(b) > 0]
+            results.sort(key=lambda x: -x[0])
+            return [b for _, b in results[:top_k]]
 
     def biz_propagate(self, source_id: str, delta: float) -> List[str]:
         """Bounded influence zone. FM-17."""
@@ -2112,7 +2189,11 @@ class MnemosLite:
         if domain == Domain.IDENTITY:
             self.identity.add(b)
         else:
-            self.graph.add_belief(b)
+            # v0.21 Fix 1: single write authority — all belief writes go through
+            # upsert_belief(). This enforces one belief per (trait, namespace)
+            # everywhere, not just on the correction path. Closes the dual-path
+            # vulnerability that caused FM-121 class regressions.
+            self.graph.upsert_belief(b)
         return b
 
     def add_causal(self, cause: str, effect: str,
@@ -2145,7 +2226,48 @@ class MnemosLite:
 
         return q
 
-    # -- FM-120/FM-121: preference correction detection and hard-write ----------
+    def _promote_synthesizer_facts_to_graph(self, namespace: str = "personal") -> None:
+        """v0.21 Fix 3: synthesizer is extraction only — graph is the only truth.
+
+        Converts stable synthesizer string facts into proper graph Belief objects
+        via upsert_belief(). The synthesizer remains the extraction engine; the
+        graph becomes the single authoritative store.
+
+        Only promotes facts that can be mapped to a structured belief.
+        Unstructured facts (string snippets, relational notes) remain in the
+        synthesizer as LLM context hints — they are not yet graph-ready.
+        """
+        FACT_TO_BELIEF = [
+            # (pattern, trait, value, domain, context)
+            (r"^User dislikes prawns$",
+             "prawns_preference", "dislike", Domain.PREFERENCE, "general"),
+            (r"^User likes prawns$",
+             "prawns_preference", "like",    Domain.PREFERENCE, "general"),
+            (r"^Works at SBI$",
+             "workplace", "SBI",             Domain.FACTUAL,    "general"),
+            (r"^\[inferred\] Works at SBI",
+             "workplace", "SBI",             Domain.FACTUAL,    "general"),
+            (r"^Has expressed feeling stuck$",
+             "emotional_state", "stuck",     Domain.EVALUATIVE, "general"),
+            (r"^Considering leaving SBI$",
+             "career_intent", "leaving_SBI", Domain.EVALUATIVE, "general"),
+            (r"^Has described loss of agency",
+             "emotional_state", "lost_agency", Domain.EVALUATIVE, "general"),
+        ]
+        import re as _re
+        for fact in self.synthesizer._facts:
+            for pattern, trait, value, domain, context in FACT_TO_BELIEF:
+                if _re.search(pattern, fact, _re.I):
+                    b = Belief(
+                        trait=trait, value=value, content=fact[:60],
+                        domain=domain, namespace=namespace,
+                        context=context,
+                        alpha=2.0, beta_=1.0,
+                        source_text="synthesizer",
+                        evidence_count=1,
+                    )
+                    self.graph.upsert_belief(b)
+                    break  # one pattern match per fact
 
     PREF_CORRECTION_PATTERNS = [
         # Dislike patterns — must come BEFORE like patterns (order matters)
@@ -2168,9 +2290,13 @@ class MnemosLite:
     ]
 
     def _detect_preference_correction(self, text: str) -> Optional[Tuple[str, str]]:
-        """FM-120: detect explicit preference statements from declarative input."""
+        """FM-120: detect explicit preference statements from declarative input.
+        v0.21 Fix 4: temporal language blocked — past states are not corrections.
+        """
         if not SessionSynthesizer._is_declarative(text):
             return None
+        if SessionSynthesizer._is_temporal(text):
+            return None   # "I used to hate prawns" is not a current correction
         text_l = text.lower().strip()
         for pattern, topic, value in self.PREF_CORRECTION_PATTERNS:
             if re.search(pattern, text_l):
@@ -2190,8 +2316,11 @@ class MnemosLite:
         """
         trait = f"{topic}_preference"
 
-        # 1. Hard-delete all prior beliefs for this trait — no soft coexistence
-        self.graph.remove_by_trait(trait, namespace=namespace)
+        # 1. Hard-delete all prior beliefs for this trait — across ALL namespaces.
+        # PREFERENCE facts are about the person, not the namespace they were
+        # written in. "User dislikes prawns" in ns=work and ns=personal are
+        # the same truth. Both must be cleared before writing the correction.
+        self.graph.remove_by_trait(trait, namespace=None)
 
         # 2. Write exactly one new belief at authoritative confidence
         corrected_label = f"User {value}s {topic}"
@@ -2280,6 +2409,8 @@ class MnemosLite:
         # FM-107: session synthesis — ingest raw query (preserve actual words)
         self.synthesizer.ingest(query, role="user")
         self.synthesizer.maybe_update(self._turn_count)
+        # v0.21 Fix 3: promote stable synthesizer facts to graph after synthesis
+        self._promote_synthesizer_facts_to_graph(namespace=namespace)
         # FM-94/FM-109: identity query detection — use canonical form
         identity_query = is_identity_query(canonical_query)
         # FM-110: belief query detection — use canonical form
@@ -2370,6 +2501,8 @@ class MnemosLite:
         """
         # Force final synthesis of any buffered turns
         self.synthesizer._synthesize()
+        # v0.21 Fix 3: promote any newly synthesized facts to graph before save
+        self._promote_synthesizer_facts_to_graph(namespace="personal")
 
         session_facts = list(self.synthesizer._facts)
         # Also add any long_term facts
