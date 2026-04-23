@@ -1,32 +1,24 @@
 """
-MNEMOS-lite v0.21 — Invariant Enforcement + Context Activation
+MNEMOS-lite v0.22 — L3 Ingestion Layer: BeliefExtractor
 
-Four fixes. No new features. Enforcing what the design always intended.
+Eight-gate pipeline between raw text and the graph.
+LLM extracts structure. System decides truth. Never mixed.
 
-Fix 1 — Single Write Authority:
-    add_belief() now routes through upsert_belief(). One belief per
-    (trait, namespace) everywhere — not just on the correction path.
-    Closes dual-path vulnerability. FM-121 class regressions impossible.
-    _hard_write_preference() now deletes across ALL namespaces (namespace=None)
-    because PREFERENCE facts are about the person, not the namespace.
+Gate 1 — Temporal:     blocks past-state language
+Gate 2 — Uncertainty:  blocks hedged/comparative statements
+Gate 3 — Subject:      blocks third-party preferences
+Gate 4 — Normalization: canonical context strings
+Gate 5 — LLM extract:  (trait, value, context) tuples only
+Gate 6 — Value norm:   maps to {like, dislike} or None
+Gate 7 — Object check: blocks unresolved pronouns
+Gate 8 — Confidence:   blocks implicit extractions
 
-Fix 2 — Context Activated in Retrieval:
-    graph.search() now takes query_context parameter.
-    Exact match first. General fallback second. No substring. No scoring change.
-    coffee+morning and coffee+evening are now separable.
-    Context was stored but ignored. Now it gates retrieval.
-
-Fix 3 — Graph is the Only Truth:
-    _promote_synthesizer_facts_to_graph() converts stable synthesizer string
-    facts into structured graph Belief objects via upsert_belief().
-    Called after every synthesis pass and at save_session().
-    Synthesizer remains the extraction engine. Graph is the single store.
-
-Fix 4 — Temporal Write Block:
-    _is_temporal() detects past-tense language ("used to", "previously",
-    "earlier", "before", "when I was", "in the past").
-    Blocks both _capture_immediate() and _detect_preference_correction().
-    "I used to hate prawns" never overwrites "I hate prawns".
+New in v0.22:
+  BeliefExtractor class in belief_extractor.py
+  _extract_and_write_beliefs() replaces pattern-based correction
+  Handles: conditional preferences, multi-context, multi-object,
+           state transitions, clause splitting
+  Falls back to v0.21 pattern matching if extractor unavailable
 """
 
 from __future__ import annotations
@@ -2099,12 +2091,17 @@ class MnemosLite:
         self._namespace_cap:     int  = namespace_cap
         self._active_namespaces: set  = set()
         self._turn_count:        int  = 0
+        self._last_namespace:    str  = "default"
         # FM-119 (v0.17): canonical identity names for this session.
-        # Populated by add_belief() when a persona instruction is loaded.
-        # Stores full persona target phrases (e.g. "cadet q0") for phrase-level
-        # replacement — word-level replacement leaves fragments ("Does you Q0").
         self._persona_names:     List[str] = []
         self._persona_target:    str       = ""  # full target phrase
+
+        # v0.22: L3 ingestion layer — structured extraction via BeliefExtractor
+        try:
+            from belief_extractor import BeliefExtractor
+            self.extractor = BeliefExtractor()
+        except ImportError:
+            self.extractor = None  # falls back to v0.21 pattern matching
 
     # -- session -------------------------------------------------------------
 
@@ -2276,6 +2273,48 @@ class MnemosLite:
                     self.graph.upsert_belief(b)
                     break  # one pattern match per fact
 
+    def _extract_and_write_beliefs(self, query: str,
+                                    namespace: str = "default") -> List[Belief]:
+        """v0.22: L3 ingestion — extract structured beliefs from user input
+        and write to graph via upsert_belief().
+
+        Uses BeliefExtractor (8-gate pipeline) when available.
+        Falls back to v0.21 pattern-based correction if extractor unavailable.
+
+        Returns list of beliefs written this turn.
+        """
+        if self.extractor is None:
+            # v0.21 fallback — pattern-based correction
+            pref_correction = self._detect_preference_correction(
+                self._canonicalize_query(query)
+            )
+            if pref_correction:
+                topic, value = pref_correction
+                self._hard_write_preference(topic, value, namespace)
+            return []
+
+        extracted = self.extractor.extract(query)
+        written = []
+
+        for eb in extracted:
+            b = Belief(
+                trait=eb.trait,
+                value=eb.value,
+                content=f"User {eb.value}s "
+                        f"{eb.trait.replace('_preference', '')}",
+                domain=Domain.PREFERENCE,
+                namespace=namespace,
+                context=eb.context,
+                alpha=2.0, beta_=1.0,
+                evidence_count=1,
+                source_text=f"extractor:turn_{self._turn_count}",
+                last_confirmed=time.time(),
+            )
+            self.graph.upsert_belief(b)
+            written.append(b)
+
+        return written
+
     PREF_CORRECTION_PATTERNS = [
         # Dislike patterns — must come BEFORE like patterns (order matters)
         (r"\bno[,.]?\s+i\b.{0,20}\b(?:don'?t|do\s+not|dislike|hate)\b.{0,20}\bprawns\b",
@@ -2377,14 +2416,10 @@ class MnemosLite:
 
         self.episodic.write("user", query, self._session_id, namespace)
 
-        # FM-120/FM-121 (v0.19): detect explicit preference corrections and
-        # hard-write to graph. Gated to first ask() call only (response_text=="")
-        # to prevent double-fire from the session runner's validation call.
+        # v0.22: L3 ingestion — structured extraction replaces pattern matching.
+        # Gated to first ask() call only (response_text=="") — prevents double-fire.
         if not response_text:
-            pref_correction = self._detect_preference_correction(canonical_query)
-            if pref_correction:
-                topic, value = pref_correction
-                self._hard_write_preference(topic, value, namespace)
+            self._extract_and_write_beliefs(canonical_query, namespace)
 
         # FM-94/FM-110: for identity/belief queries, retrieve all beliefs across namespaces
         if is_identity_query(canonical_query) or is_belief_query(canonical_query):
