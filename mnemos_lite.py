@@ -202,11 +202,16 @@ CONSTRAINT_EXPANSIONS = {
 
 @dataclass
 class Belief:
-    """Structured belief with Beta(alpha,beta) uncertainty. FM-76."""
+    """Structured belief with Beta(alpha,beta) uncertainty. FM-76.
+
+    FM-157: context=None is the engine-side sentinel for "unconditional".
+    The string "general" is a UI-only display value — it must never be
+    written into this field by ingestion or search paths.
+    """
     id:                str   = field(default_factory=lambda: str(uuid.uuid4())[:8])
     trait:             str   = ""
     value:             str   = ""
-    context:           str   = "general"
+    context:           Optional[str] = None   # None = unconditional (FM-157)
     exceptions:        List  = field(default_factory=list)
     content:           str   = ""
     domain:            Domain = Domain.PREFERENCE
@@ -250,10 +255,22 @@ class Belief:
         if c >= 0.55:               return f"{base} — tentative"
         return f"{base} — uncertain (alpha={self.alpha:.1f}, beta={self.beta_:.1f})"
 
-    def matches_context(self, query_context: str) -> bool:
-        """FM-79: hard context gate."""
-        if self.context == "general":
+    def matches_context(self, query_context: Optional[str]) -> bool:
+        """FM-79 + FM-157: hard context gate.
+
+        Engine semantics:
+          - self.context is None  → unconditional belief; matches anything.
+          - self.context is str   → belief is conditional on this context;
+                                    matches only when query_context equals it
+                                    or contains it as a substring.
+
+        The string "general" is not a valid engine value and is treated as None
+        if encountered (defensive — should not arise after FM-157).
+        """
+        if self.context is None or self.context == "general":
             return True
+        if query_context is None:
+            return False
         return self.context.lower() in query_context.lower()
 
     def label(self) -> str:
@@ -1878,14 +1895,17 @@ class KnowledgeGraph:
         """Retrieve beliefs scored by word overlap, confidence, and recency.
 
         v0.21 Fix 2: context is now an active retrieval dimension.
+        v0.23 (FM-157): engine sentinel for "unconditional" is context=None.
+
           - If query_context is provided: return beliefs where belief.context
             exactly matches query_context (case-insensitive), scored normally.
-          - If no exact match found, fall back to beliefs with context="general".
-          - If query_context is None: return all beliefs with context="general"
-            plus beliefs that have no specific context.
+          - If no exact match found, fall back to beliefs with context=None
+            (unconditional).
+          - If query_context is None: return beliefs with context=None only.
+            Context-specific beliefs require an explicit context query.
           - Exact match only. No substring. No scoring adjustment.
 
-        This makes coffee+morning and coffee+evening separable for the first time.
+        This makes coffee+morning and coffee+evening separable.
         """
         q_words = set(query.lower().split()) - STOPWORDS
         fp = ForgettingPolicy()
@@ -1907,24 +1927,30 @@ class KnowledgeGraph:
             base     = overlap / max(1, len(q_words)) * b.confidence * b.recency_boost()
             return fp.pawd_score(b, base)
 
+        # Defensive: treat any lingering "general" string as None (FM-157).
+        def _is_unconditional(b: Belief) -> bool:
+            return b.context is None or (
+                isinstance(b.context, str)
+                and b.context.lower().strip() in ("", "general")
+            )
+
         if query_context is not None:
             qc = query_context.lower().strip()
             # Phase 1: exact context match
             exact = [b for b in candidates
-                     if b.context.lower().strip() == qc]
+                     if b.context is not None
+                     and b.context.lower().strip() == qc]
             if exact:
                 results = sorted(exact, key=lambda b: -score(b))
                 return results[:top_k]
-            # Phase 2: fall back to general only
-            general = [b for b in candidates
-                       if b.context.lower().strip() == "general"]
+            # Phase 2: fall back to unconditional beliefs
+            general = [b for b in candidates if _is_unconditional(b)]
             results = sorted(general, key=lambda b: -score(b))
             return results[:top_k]
         else:
-            # No context specified: return general beliefs only
-            # (beliefs with a specific context require an explicit context query)
-            general = [b for b in candidates
-                       if b.context.lower().strip() == "general"]
+            # No context specified: return unconditional beliefs only.
+            # (Beliefs with a specific context require an explicit context query.)
+            general = [b for b in candidates if _is_unconditional(b)]
             results = [(score(b), b) for b in general if score(b) > 0]
             results.sort(key=lambda x: -x[0])
             return [b for _, b in results[:top_k]]
@@ -2142,11 +2168,16 @@ class MnemosLite:
     # -- belief management ---------------------------------------------------
 
     def add_belief(self, content: str = "", trait: str = "", value: str = "",
-                   context: str = "general", exceptions: list = None,
+                   context: Optional[str] = None, exceptions: list = None,
                    domain: Domain = Domain.PREFERENCE, ns: str = "default",
                    alpha: float = 2.0, beta: float = 1.0,
                    source_text: str = "", immutable: bool = False) -> Belief:
         self._register_namespace(ns)
+
+        # FM-157: normalize legacy "general" passed by older callers → None.
+        # Engine invariant: context=None means unconditional.
+        if isinstance(context, str) and context.lower().strip() in ("", "general", "none"):
+            context = None
 
         # FM-109/FM-112: detect persona/role instructions and route to synthesizer
         # FM-112: store structured persona object, not just role label
