@@ -481,11 +481,26 @@ CONTEXT_WORDS_IN_TRAIT: set = {
 # They are context words only when paired with another entity word.
 
 
+# ── FM-170: Canonical compound contexts ───────────────────────────
+#
+# The set of multi-word context strings the system recognizes as
+# canonical compounds.  Used by Gate 7 Path B (FM-170) to decide
+# whether to accept a repaired belief that combines a drift word
+# from the trait with an LLM-supplied context.
+#
+# Authority: the normalization map. If a compound context is in
+# CONTEXT_NORMALIZATIONS.values(), it is recognized.
+# If not, Gate 7 refuses to fabricate it.
+CANONICAL_COMPOUND_CONTEXTS: set = {
+    v for v in CONTEXT_NORMALIZATIONS.values() if "_" in v
+}
+
+
 def gate_object_resolution(
     trait: str,
     llm_context: Optional[str] = None,
-) -> Tuple[bool, str, Optional[Tuple[str, str]]]:
-    """Gate 7: object/trait validation with deterministic repair (FM-156).
+) -> Tuple[bool, str, Optional[Tuple[str, Optional[str]]]]:
+    """Gate 7: object/trait validation with deterministic repair (FM-156, FM-170).
 
     Returns (passes, reason, repair).
       passes  — whether the belief may proceed
@@ -499,13 +514,39 @@ def gate_object_resolution(
          are valid entity traits).
          If multi-word trait: attempt deterministic repair.
 
-    Repair policy (strict, per Commander V):
-      Repair ONLY when the split is clean:
-        - trait has exactly 2 component words
-        - exactly one is a context word
-        - the other is a valid entity (not a pronoun, not a context word)
-        - llm_context is None (LLM did not already populate context)
-      Otherwise → reject. No fabrication, no concatenation, no LLM trust.
+    Repair policy (strict, FM-156 + FM-170 extension):
+
+      Path A — LLM context empty (the original FM-156 path):
+        Repair when:
+          - trait has exactly 2 component words
+          - exactly one is a context word
+          - the other is a valid entity (not pronoun, not context word)
+        Result: trait = entity_preference, context = drift_word.
+        This is the simple case: trait carried the context, LLM didn't
+        provide one separately, so we move the drift word into the
+        context field.
+
+      Path B — LLM context non-empty, trait drift detected (FM-170):
+        Both signals are explicit user input — neither is fabricated.
+        Repair when:
+          - trait has exactly 2 component words
+          - exactly one is a context word
+          - the other is a valid entity
+          - normalize(drift_word) + "_" + normalize(llm_context) is a
+            recognized canonical compound (i.e., appears in the
+            canonical context set).
+        Result: trait = entity_preference, context = canonical compound.
+
+        IMPORTANT (Commander V): each part is normalized independently,
+        then composed with underscore. The composed string is NOT
+        re-normalized, because that would reintroduce FM-169
+        (substring-match shadowing) inside the FM-170 fix.
+
+        If composition is not canonical → reject (no fabrication of
+        new compound contexts).
+
+      Otherwise → reject. The map is the authority on canonical
+      compounds; if the composition isn't recognized, we don't invent it.
     """
     # Normalise: strip suffix, split on underscore
     obj_raw = trait.replace("_preference", "").strip()
@@ -532,31 +573,52 @@ def gate_object_resolution(
         # Multi-word but no context drift — allow (e.g., "car_keys_preference")
         return True, "pass_multi_word", None
 
-    # Drift detected. Strict repair conditions:
-    #   (a) exactly 2 component words
-    #   (b) exactly 1 is a context word
-    #   (c) the other is a clean entity (not pronoun, not context word)
-    #   (d) llm_context is None/empty
-    clean_repair_possible = (
+    # Drift detected. Common preconditions for any repair:
+    #   - trait has exactly 2 component words
+    #   - exactly 1 is a context word
+    #   - the other is a clean entity (not a pronoun, not a context word)
+    structurally_repairable = (
         len(obj_words) == 2
         and len(drift_words) == 1
-        and (not llm_context or llm_context.lower() in ("", "general", "none"))
     )
-
-    if not clean_repair_possible:
-        # Ambiguous — reject rather than fabricate
+    if not structurally_repairable:
         return False, f"trait_drift_unrepairable:{','.join(sorted(drift_words))}", None
 
-    # Identify entity word and context word
-    context_word = drift_words[0]
+    drift_word = drift_words[0]
     entity_word = [w for w in obj_words if w not in CONTEXT_WORDS_IN_TRAIT][0]
-
-    # Validate entity word is clean (not a pronoun/placeholder)
     if entity_word in INVALID_TRAIT_OBJECTS:
         return False, "trait_drift_bad_entity", None
 
     repaired_trait = f"{entity_word}_preference"
-    return True, f"repaired:{context_word}", (repaired_trait, context_word)
+    llm_ctx_empty = (
+        not llm_context
+        or llm_context.lower().strip() in ("", "general", "none")
+    )
+
+    # Path A — FM-156 simple repair (LLM context empty)
+    if llm_ctx_empty:
+        return True, f"repaired:{drift_word}", (repaired_trait, drift_word)
+
+    # Path B — FM-170 canonical-compound repair (LLM context set)
+    # Strict pipeline (Commander V):
+    #   1. Normalize drift and LLM context INDEPENDENTLY.
+    #   2. Compose via underscore.
+    #   3. Validate against canonical set.
+    #   Do NOT normalize the combined string (that would re-enter FM-169).
+    drift_norm = normalize_context(drift_word)
+    llm_norm = normalize_context(llm_context)
+
+    if drift_norm is None or llm_norm is None:
+        # One of the parts normalized away — cannot compose cleanly.
+        return False, f"trait_drift_unrepairable:llm_ctx_set", None
+
+    candidate = f"{drift_norm}_{llm_norm}"
+
+    if candidate in CANONICAL_COMPOUND_CONTEXTS:
+        return True, f"repaired:canonical:{candidate}", (repaired_trait, candidate)
+
+    # Not a recognized canonical compound — reject rather than fabricate.
+    return False, f"trait_drift_unrepairable:llm_ctx_set:{candidate}_not_canonical", None
 
 
 # ── Gate 8: Confidence filter ─────────────────────────────────────
@@ -764,6 +826,99 @@ def gate_negation_enforcement(
     return corrected
 
 
+# ── Gate 10 (sentence scope): FM-163 ─────────────────────────────
+#
+# Problem: English negation scope often crosses clause boundaries.
+#   "I like coffee in the morning and tea at night, but not at night"
+# split_clauses() separates "but not at night" into its own clause.
+# The per-clause Gate 10 receives an isolated fragment with no beliefs
+# to invert — the negation is silently lost.
+#
+# Fix: sentence-scope second pass over all clause-extracted beliefs.
+#
+# STRICT INVARIANT (Commander V, non-negotiable):
+#   - Only operates on beliefs that already exist.
+#   - Never creates beliefs.
+#   - Never infers missing targets.
+#   - Never expands scope.
+# The system models observed structured statements, not logical negation.
+# If the LLM did not produce a belief with context=<negated>, there is
+# nothing to flip. The negation intent is acknowledged but not materialized.
+
+def gate_negation_enforcement_sentence(
+    extracted_beliefs: List["ExtractedBelief"],
+    full_sentence: str,
+) -> List["ExtractedBelief"]:
+    """Sentence-scope Gate 10 (FM-163).
+
+    Scans the whole sentence for "not at/in/during/on/when <context>"
+    phrases. For each existing extracted belief whose context matches
+    a negated context, flips its value to the opposite.
+
+    Strict rules:
+      - Operates only on beliefs already in extracted_beliefs.
+      - Never creates new beliefs.
+      - Never infers or expands scope.
+      - Per-trait dominant value comes from non-negated beliefs of that
+        trait; if no dominant can be determined for a trait, beliefs
+        for that trait are not flipped.
+
+    Does not modify the input list — returns a new list.
+    """
+    # Find all negated contexts in the full sentence.
+    negated_contexts: set = set()
+    for m in _NOT_AT_PATTERN.finditer(full_sentence.lower()):
+        ctx_raw = m.group(1).strip()
+        norm = normalize_context(ctx_raw)
+        if norm is not None:
+            negated_contexts.add(norm)
+
+    if not negated_contexts:
+        return list(extracted_beliefs)  # no negation phrase — unchanged
+
+    # Determine dominant value per trait from non-negated beliefs only.
+    # Dominant = first observed value for this trait in a non-negated context.
+    dominant_value: dict = {}
+    for eb in extracted_beliefs:
+        if eb.trait in dominant_value:
+            continue
+        ctx = eb.context  # already normalized (None or canonical string)
+        if ctx not in negated_contexts:
+            dominant_value[eb.trait] = eb.value
+
+    OPPOSITE = {"like": "dislike", "dislike": "like"}
+
+    corrected: List[ExtractedBelief] = []
+    for eb in extracted_beliefs:
+        ctx = eb.context
+
+        # Only flip if: belief has a context, that context is negated,
+        # the trait has a non-negated dominant value, and we haven't
+        # already flipped this belief at per-clause scope (idempotence).
+        if (
+            ctx is not None
+            and ctx in negated_contexts
+            and eb.value != OPPOSITE.get(dominant_value.get(eb.trait, ""), "__none__")
+        ):
+            dom = dominant_value.get(eb.trait)
+            if dom and dom in OPPOSITE:
+                # Only flip if current value equals dominant (i.e., LLM did
+                # not already produce the inverse; this guards against
+                # double-flip when per-clause Gate 10 already enforced).
+                if eb.value == dom:
+                    eb = ExtractedBelief(
+                        trait=eb.trait,
+                        value=OPPOSITE[dom],
+                        context=eb.context,
+                        confidence=eb.confidence,
+                        source=eb.source,
+                    )
+
+        corrected.append(eb)
+
+    return corrected
+
+
 # ══════════════════════════════════════════════════════════════════
 # BELIEF EXTRACTOR — MAIN CLASS
 # ══════════════════════════════════════════════════════════════════
@@ -782,7 +937,13 @@ class BeliefExtractor:
         self.api_key = api_key or os.environ.get("OPENAI_API_KEY", "")
 
     def extract(self, sentence: str) -> List[ExtractedBelief]:
-        """Full pipeline: sentence → list of validated ExtractedBelief."""
+        """Full pipeline: sentence → list of validated ExtractedBelief.
+
+        Pipeline has two scopes:
+          1. Per-clause: Gates 1-8, Gate 9, Gate 10 (per-clause negation).
+          2. Sentence-level: Gate 10 second pass (FM-163) — captures
+             negations split away from their target clause.
+        """
         results = []
 
         # Step 1: Controlled clause splitting
@@ -791,6 +952,10 @@ class BeliefExtractor:
         for clause in clauses:
             clause_beliefs = self._process_clause(clause)
             results.extend(clause_beliefs)
+
+        # Step 2: Sentence-scope negation pass (FM-163)
+        # Only flips existing beliefs. Never creates, never infers.
+        results = gate_negation_enforcement_sentence(results, sentence)
 
         return results
 
@@ -1004,5 +1169,27 @@ class BeliefExtractor:
                                               **belief_trace})
 
             trace["clauses"].append(clause_trace)
+
+        # Sentence-scope Gate 10 pass (FM-163)
+        before_sentence_pass = list(trace["beliefs"])
+        trace["beliefs"] = gate_negation_enforcement_sentence(
+            trace["beliefs"], sentence
+        )
+
+        # Log sentence-pass diffs for observability
+        sentence_pass_flips = []
+        for before, after in zip(before_sentence_pass, trace["beliefs"]):
+            if before.value != after.value:
+                sentence_pass_flips.append({
+                    "trait": after.trait,
+                    "context": after.context,
+                    "from": before.value,
+                    "to": after.value,
+                })
+        trace["sentence_pass"] = {
+            "gate": "10_sentence",
+            "name": "negation_sentence_scope",
+            "flips": sentence_pass_flips,
+        }
 
         return trace
