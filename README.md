@@ -16,6 +16,12 @@
 </div>
 
 ---
+## Statusv0.25  ·  172 failure modes catalogued  ·  16 real sessions + Phase 2/3 adversarial
+Deterministic core verified — python verify.py
+Stochastic boundary: Gate 5 (LLM extraction) not covered by verify — by design
+Live API adversarial sequences pending (SP-2 unresolved)
+
+---
 
 Most AI systems remember poorly.
 
@@ -44,6 +50,20 @@ There is a quiet irony in the name. We built a memory system through a conversat
 **What it is not:** A solved problem. Several architecture layers remain design targets (async consolidation, grounding oracle, full arbitration). Context representation is still flat — multi-context overlap (`monday` vs `monday morning`) has no hierarchy. The system is "deterministic over a stochastic source": gates can only correct what the LLM materializes; if a belief never gets extracted, no gate can repair it. Social detection is text-only. A true narrative identity across sessions — "this is who this person is in five sentences" — does not yet exist the way the architecture intends.
 
 The right framing: *"We discovered the real structure of the problem, built a disciplined attempt at solving it, broke it under adversarial pressure, fixed what we could, and named what we couldn't."*
+
+---
+## Enforced Properties
+
+Four properties the code structurally guarantees — each is a regression test target, not a design aspiration:
+
+| Property | How it is enforced |
+|----------|--------------------|
+| One belief per `(trait, namespace, context)` | `graph.upsert_belief()` updates in place; never inserts a duplicate |
+| Provenance is append-only | Audit log is immutable; `remove_by_trait()` deletes graph nodes, never episodic records |
+| Every belief carries `Beta(α, β)` | `Belief` dataclass has no codepath that sets `alpha` or `beta_` to None |
+| `context=None` is the sole engine sentinel for unconditional | `add_belief()` normalizes `"general"`/`""` to `None` at the API boundary; `"general"` never enters engine state |
+
+`python verify.py` tests all four.
 
 ---
 
