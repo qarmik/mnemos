@@ -10,8 +10,8 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/Python-3.8%2B-blue.svg)](https://python.org)
-[![Failure Modes](https://img.shields.io/badge/Failure%20Modes-121%20addressed-green.svg)](#the-failure-mode-register)
-[![Real Sessions](https://img.shields.io/badge/Real%20Sessions-16%20completed-orange.svg)](#what-real-sessions-revealed)
+[![Failure Modes](https://img.shields.io/badge/Failure%20Modes-172%20catalogued-green.svg)](#the-failure-mode-register)
+[![Real Sessions](https://img.shields.io/badge/Real%20Sessions-16%20%2B%20Phase%202%2F3-orange.svg)](#what-real-sessions-revealed)
 
 </div>
 
@@ -39,11 +39,11 @@ There is a quiet irony in the name. We built a memory system through a conversat
 
 ## Honest Status
 
-**What it is:** A carefully stress-tested architecture with a working Python prototype, 121 identified failure modes, and 16 real human sessions of validation — including a stability run that demonstrated clean drift resistance, graph state integrity, and coherent multi-session reasoning. The core ideas — belief uncertainty, trust tiers, truth immunity, autonomy preservation — are genuine contributions beyond standard retrieval systems.
+**What it is:** A carefully stress-tested architecture with a working Python prototype, 172 catalogued failure modes (the majority addressed; some confirmed-and-deferred for representation work; some hypothesized), 16 real human sessions, and two adversarial sequence phases. v0.22 introduced the BeliefExtractor — an L3 ingestion layer where the LLM extracts structure and the system decides truth through 10 deterministic gates. The core ideas — belief uncertainty, trust tiers, truth immunity, autonomy preservation, deterministic validation over stochastic extraction — are genuine contributions beyond standard retrieval systems.
 
-**What it is not:** A solved problem. Several architecture layers remain design targets. The system reasons from pattern-matched synthesis rather than LLM-based extraction, which limits the depth of implicit fact capture. Social detection is text-only. A true narrative identity across sessions — "this is who this person is in five sentences" — does not yet exist the way the architecture intends.
+**What it is not:** A solved problem. Several architecture layers remain design targets (async consolidation, grounding oracle, full arbitration). Context representation is still flat — multi-context overlap (`monday` vs `monday morning`) has no hierarchy. The system is "deterministic over a stochastic source": gates can only correct what the LLM materializes; if a belief never gets extracted, no gate can repair it. Social detection is text-only. A true narrative identity across sessions — "this is who this person is in five sentences" — does not yet exist the way the architecture intends.
 
-The right framing: *"We discovered the real structure of the problem, built a disciplined attempt at solving it, and ran it until we could trust it."*
+The right framing: *"We discovered the real structure of the problem, built a disciplined attempt at solving it, broke it under adversarial pressure, fixed what we could, and named what we couldn't."*
 
 ---
 
@@ -59,7 +59,7 @@ This became FM-98 through FM-101 — a cluster of failures around emotional regi
 
 In sessions after those fixes: frustration-triggered clarification requests dropped to near zero. Preference violations (like bullet lists after a user said "no bullet lists") were eliminated in the session runner. Emotional over-escalation — crisis resources for mild disappointment — stopped occurring.
 
-That pattern repeated 121 times. A failure observed, named, fixed, measured. That is the method.
+That pattern repeated 172 times across real sessions and adversarial sequences. A failure observed, named, fixed (or deferred with explicit reasoning), measured. That is the method.
 
 ---
 
@@ -77,7 +77,7 @@ That pattern repeated 121 times. A failure observed, named, fixed, measured. Tha
 | User calls their boss "an asshole" | Lost after session ends | Stored as low-confidence relational perception; surfaces in next session when relevant |
 | "Does Cadet Q0 like prawns?" | Treats persona name as third party | Canonicalizes to first-person before retrieval; resolves to stored belief |
 
-These are drawn from real sessions, not hypotheticals. The left column is what MNEMOS-lite v0.4 actually did. The right column is what v0.20 does.
+These are drawn from real sessions, not hypotheticals. The left column is what MNEMOS-lite v0.4 actually did. The right column is what v0.25 does.
 
 ---
 
@@ -106,7 +106,7 @@ Invariant across every version.
 
 ## How It Was Built
 
-Adversarial co-evolution across seven specification versions, five code critique rounds, and sixteen real human sessions.
+Adversarial co-evolution across seven specification versions, five code critique rounds, sixteen real human sessions, and two adversarial sequence phases that pressure-tested the new ingestion layer.
 
 ChatGPT (codenamed **Commander V**) identified failure modes. Claude analyzed, pushed back on invalid ones, implemented valid fixes, ran simulations and verification suites. Qarmik drove, relayed critiques, made the calls, and ran real sessions to find what simulation could not surface.
 
@@ -133,17 +133,25 @@ Commander V, on the project's strategic direction at key inflection points:
 
 ## What MNEMOS Still Gets Wrong
 
-Most remaining gaps are calibration questions, not architecture failures.
+Most remaining gaps split into two classes: calibration questions and structural representation limits surfaced under adversarial pressure.
 
-**Session memory compression is pattern-based.** The SessionSynthesizer catches explicit disclosures through regex patterns. A user's emotional arc across a session is synthesized structurally but not semantically. In production, this layer would call an LLM.
+**Context has no hierarchy.** `monday` and `monday morning` are stored as independent beliefs with no relationship. A user who said "I like coffee on Monday" gets no match for a "Monday afternoon" query because exact-token equality plus no hierarchy treats them as unrelated. This is FM-159, deferred to a representation pass.
+
+**Sentence-scope dominance is order-dependent.** The negation second-pass uses "first non-negated value encountered" as the dominant value for a trait. With mixed polarity across non-negated contexts, the answer depends on LLM iteration order. FM-166 — heuristic limit, not a clean fix without representation change.
+
+**Normalization map shadows compound contexts.** `normalize_context("monday mornings")` returns `"morning"` because dict iteration matches the shorter `mornings → morning` key first. Specific compounds collapse to atomic ones via key-ordering accident. FM-169, next priority.
+
+**The system is deterministic over a stochastic source.** Gates cannot correct what the LLM didn't extract. A negation that targets a belief the LLM never materialized is silently lost — the system has no representation for "the user said something negative I didn't get a chance to write." Acknowledged as a structural property (SP-1), not a bug.
+
+**Session memory compression below the BeliefExtractor remains pattern-based.** The SessionSynthesizer's regex layer for emotional arc and behavioral patterns is unchanged. v0.22+ replaced the prawns-only ingestion with LLM extraction; the broader synthesizer still uses patterns.
 
 **Social detection is text-only.** The SocialStateTracker reads tone through patterns. It misses tone carried through brevity, rhythm, or deliberate omission.
 
-**Relational context is lightly weighted.** The system currently ranks a food preference and a workplace trap at similar salience when answering "what is my main problem?" Calibration of what deserves prominence in a serious personal context is an open question.
+**Relational context is lightly weighted.** The system ranks a food preference and a workplace trap at similar salience when answering "what is my main problem?" Calibration of what deserves prominence in a serious personal context is open.
 
-**Typo resilience in persona parsing.** `_parse_persona()` does exact string matching. "Cader Q0" instead of "Cadet Q0" produces a slightly mismatched canonical identity. Low-frequency issue; low priority.
+**Depth ceiling on some models.** FM-106 (penetrative insight) has a model-dependent ceiling. `gpt-5.4-mini` produces surface-level psychological observations on some threads. Prompt engineering helps; it does not fully close the gap.
 
-**Depth ceiling on some models.** FM-106 (penetrative insight) has a model-dependent ceiling. gpt-5.4-mini produces surface-level psychological observations on some threads. Prompt engineering helps; it does not fully close the gap.
+Full register including deferred items, hypothesized failures, and structural properties: [`docs/failure_modes.md`](docs/failure_modes.md).
 
 ---
 
@@ -174,7 +182,7 @@ The constitution of MNEMOS. No layer may violate them.
 | L0 | Fast Path | <50ms real-time access, TTL 72h | Implemented |
 | L1 | Episodic Store | Verbatim write-once records, BM25+dense search | Implemented |
 | L2 | Knowledge Graph | Beta(α,β) nodes, bounded influence propagation | Implemented |
-| L3 | Semantic Store | Async consolidation, versioned snapshots | Design target |
+| L3 | Semantic Store | LLM ingestion (BeliefExtractor, 10 gates) + async consolidation | Ingestion implemented (v0.22); consolidation design target |
 | L4 | Inference Engine | Read-only context assembly, credibility filter | Implemented |
 | L5 | Safety Layer | Anomaly detection, circuit breakers | Partial |
 | L6 | Audit Log | Immutable append-only, signed records | Implemented |
@@ -206,28 +214,28 @@ The constitution of MNEMOS. No layer may violate them.
 
 ## The Failure Mode Register
 
-121 failure modes identified and addressed across simulation and real sessions. Selected:
+172 failure modes catalogued across simulation, real sessions, and adversarial sequence phases. Numbering has permanent gaps at FM-122–146 and FM-158–162 (numbering convenience, not unrecorded failures). Selected:
 
 | FM | Name | The failure | The fix |
 |----|------|-------------|---------|
 | 01 | Salience ≠ Truth | Importance contaminated truth judgments | 5 orthogonal scores, structurally decoupled |
 | 47 | Epistemic Sycophancy | System agreed to avoid friction | Truth-Preservation Override |
 | 87 | Learned Helplessness Loop | 7 direct answers → no reflection ever | Forced re-entry, topic-aware |
-| 93 | Preference-Blind Re-entry | FM-87 fired despite user preference for direct answers | Per-topic preference tracked, suppresses at ≥0.65 confidence |
 | 98 | Frustration Recovery | "Not helping" → asked for clarification | FrustrationTracker — change approach, no questions |
 | 100 | Bullet List Default | Casual conversation got formatted reports | ConversationalRegister — prose for casual turns |
 | 101 | Emotion Over-escalation | "Very sad" triggered crisis resources | Three-tier classifier: LOW / MEDIUM / HIGH |
-| 104 | No Social State | System explained policy under pressure instead of adapting | SocialStateTracker — live adversarial/depth model |
-| 107 | No Session Compression | Each turn in isolation | SessionSynthesizer — compressed user model every 5 turns |
-| 113 | Preference Conflict Instability | "I hate prawns" silently overwritten | Conflict recorded with history, not silently overwritten |
-| 116 | Cross-Session Read Failure | Session opened with empty prior context despite data on disk | Three-bug fix: immediate capture, forced synthesis at save, fresh disk read at session open |
+| 116 | Cross-Session Read Failure | Session opened with empty prior context despite data on disk | Three-bug fix: immediate capture, forced synthesis at save, fresh disk read |
 | 117 | False Positive Capture | "Do I like prawns?" written as "User likes prawns" | Declarative gate: questions never captured as facts |
-| 118 | Evaluative Fact Blindness | "He is an asshole" handled in session, forgotten next session | Relational evaluation capture at 0.40 confidence; slow decay |
 | 119 | Third-Person Identity Bypass | "Does Cadet Q0 like prawns?" bypassed stored first-person beliefs | Phrase-level canonicalization; persona name → "you" before retrieval |
-| 120 | In-Session Preference Decay | Correction acknowledged, forgotten 15 turns later | Hard-write to graph at 0.85 confidence; correction drift-resistant |
 | 121 | Belief Graph Corruption | 6 duplicate beliefs accumulated; dislike corrections self-collapsed | Hard delete + upsert + single-fire gate. One belief per trait, always |
+| 147 | Missing Context Capture | Pattern-based ingestion only knew prawns; everything else invisible | v0.22 BeliefExtractor — domain-generic LLM extraction with 10 deterministic gates |
+| 156 | Recoverable Trait Drift | LLM emits `monday_meeting_preference` — strict rejection destroyed signal | Gate 7 deterministic repair: split drift word into context field |
+| 157 | Pseudo-Context Pollution | `context="general"` and `context=None` were indistinguishable engine-side | `None` is the sole sentinel for unconditional. `"general"` is UI-only |
+| 163 | Clause-Split Negation Destruction | "but not at night" got split into its own clause; per-clause Gate 10 had nothing to invert | Sentence-scope second pass over all clause-extracted beliefs |
+| 165 | Retrieval Substring Collision | `"night"` substring-matched `"midnight"` at retrieval | Token-set equality. None is the only wildcard |
+| 170 | Strict Reject Discards Legitimate Input | Trait drift + LLM context together caused both signals to be silently dropped | Gate 7 Path B — canonical compound repair via independent normalization |
 
-Full register: [`docs/failure_modes.md`](docs/failure_modes.md)
+Full register including deferred and hypothesized failures: [`docs/failure_modes.md`](docs/failure_modes.md)
 
 ---
 
@@ -248,6 +256,22 @@ Key moments from real sessions:
 - **Session 16** (stability run): "Do I like prawns?" → "No." No explanation. No hesitation. No conflict framing. Correct state backed by clean graph.
 
 ---
+
+## What Adversarial Sequences Revealed
+
+Real sessions surface what humans actually do. They cannot reliably surface edge cases in ingestion logic — the adversarial phases were designed for that. Two sequence phases ran against v0.22+ with synthetic inputs designed to break specific gates:
+
+**Phase 2 — A1 through A12 (drove v0.24).** Inputs targeting context boundaries, trait drift, restriction enforcement, and clause splitting. Surfaced the cross-clause negation pattern: when the LLM extrapolates "not at night" beliefs into a separated clause, per-clause Gate 10 has nothing to invert. Drove the sentence-scope Gate 10 second pass (FM-163) and token-set retrieval discipline (FM-165).
+
+**Phase 3 — B1 through B12 (drove v0.25 and surfaced new failure classes).**
+- B7 silently dropped a legitimate user statement because Gate 7's strict-reject path collided with compound input. **Highest-severity finding** — fixed in v0.25 via canonical compound repair (FM-170).
+- B9 surfaced FM-169 — the normalization map's substring iteration shadows compound keys with shorter atomic ones. Next-priority fix.
+- B1, B2 confirmed FM-166 — sentence-scope dominance is order-dependent. Same semantic input, different LLM clause order, different graph state.
+- B4, B10 confirmed two structural properties: SP-1 (determinism is conditional on LLM coverage) and SP-2 (the fix corrects the pessimistic-LLM case; the faithful-LLM case remains unverified until live API runs).
+
+The adversarial phases produced a different class of finding than real sessions: not tone or calibration, but **what the system silently loses when language is pressed against the ingestion contract**. Every Phase 3 finding is documented in [`docs/sequence_results.md`](docs/sequence_results.md) and [`docs/failure_modes.md`](docs/failure_modes.md).
+
+The pattern that runs through all of it: **the system is deterministic over a stochastic source.** This is named, not hidden.
 
 ## How MNEMOS Differs from MemPalace
 
@@ -293,17 +317,18 @@ python mnemos_session.py
 
 ```
 mnemos/
-├── mnemos_lite.py                         Core prototype — v0.20, ~2400 lines
+├── mnemos_lite.py                         Core prototype — v0.25, ~2860 lines
+├── belief_extractor.py                    L3 ingestion layer — 10-gate pipeline (v0.22+)
 ├── mnemos_session.py                      Real session runner (OpenAI API)
-├── MNEMOS_Architecture_Reference.pdf      Complete continuity document
+├── MNEMOS_Architecture_Reference.pdf      Complete continuity document (regenerated periodically; may lag markdown by one cycle)
 └── docs/
-    ├── architecture.md                    Full specification
-    ├── failure_modes.md                   All 121 FMs
-    ├── simulation.md                      v0.4 through v0.7 results
+    ├── architecture.md                    Full specification (v0.25)
+    ├── failure_modes.md                   FM-01 through FM-172 catalogued
+    ├── sequence_results.md                v0.21 sequence tests + Phase 2 + Phase 3 adversarial trace
+    ├── simulation.md                      v0.4 through v0.7 simulation results (historical)
     └── where_mnemos_misreads_humans.md    Observations from 16 real sessions
-```
 
----
+```
 
 ## Credits
 
@@ -317,7 +342,7 @@ mnemos/
 
 MNEMOS began because Mei Ling wrote about MemPalace, Qarmik read it, and asked what it didn't solve. Two AI systems from competing companies, coordinated by a human who changed the question, built something neither would have reached alone.
 
-ChatGPT/Commander V was not a relay — it was a co-architect who named FM-16 through FM-60, forced three README revisions for overclaiming, and provided the strategic framing at every inflection point that changed the project's direction. The adversarial dynamic was real and necessary.
+ChatGPT/Commander V was not a relay — it was a co-architect who named FM-16 through FM-60, forced three README revisions for overclaiming, drove the v0.22–v0.25 adversarial build sequence (FM-153, FM-156, FM-157, FM-163, FM-165, FM-170 all named or shaped under Commander V's review), and provided the strategic framing at every inflection point. The adversarial dynamic was real and necessary.
 
 ---
 
