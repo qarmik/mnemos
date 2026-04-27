@@ -256,22 +256,36 @@ class Belief:
         return f"{base} — uncertain (alpha={self.alpha:.1f}, beta={self.beta_:.1f})"
 
     def matches_context(self, query_context: Optional[str]) -> bool:
-        """FM-79 + FM-157: hard context gate.
+        """FM-79 + FM-157 + FM-165: hard context gate.
 
         Engine semantics:
           - self.context is None  → unconditional belief; matches anything.
-          - self.context is str   → belief is conditional on this context;
-                                    matches only when query_context equals it
-                                    or contains it as a substring.
+                                    None is the ONLY wildcard.
+          - self.context is str   → belief is conditional on this context.
+                                    Matches only when query_context has
+                                    EXACTLY the same token set (FM-165).
+                                    No substring. No subset. No hierarchy.
 
         The string "general" is not a valid engine value and is treated as None
         if encountered (defensive — should not arise after FM-157).
+
+        Examples (FM-165):
+          belief.context="night" matches query_context="night"
+          belief.context="night" does NOT match "midnight"     (was a bug pre-FM-165)
+          belief.context="monday" does NOT match "monday_morning" (no subset match)
+          belief.context="monday_morning" does NOT match "monday" (no hierarchy)
         """
+        # Unconditional belief — matches any query (None is the only wildcard)
         if self.context is None or self.context == "general":
             return True
         if query_context is None:
             return False
-        return self.context.lower() in query_context.lower()
+
+        # Exact token-set equality. Tokenize on underscore and whitespace.
+        def _tokens(s: str) -> frozenset:
+            return frozenset(s.lower().replace("_", " ").split())
+
+        return _tokens(self.context) == _tokens(query_context)
 
     def label(self) -> str:
         if self.trait and self.value:
@@ -1934,12 +1948,21 @@ class KnowledgeGraph:
                 and b.context.lower().strip() in ("", "general")
             )
 
+        # FM-165: exact token-set equality for context match.
+        # "monday morning" and "monday_morning" should match; "night" must NOT
+        # match "midnight". Consistent with matches_context().
+        def _context_tokens(s: Optional[str]) -> frozenset:
+            if s is None:
+                return frozenset()
+            return frozenset(s.lower().replace("_", " ").split())
+
         if query_context is not None:
-            qc = query_context.lower().strip()
-            # Phase 1: exact context match
+            qc_tokens = _context_tokens(query_context)
+            # Phase 1: exact token-set context match (FM-165)
             exact = [b for b in candidates
                      if b.context is not None
-                     and b.context.lower().strip() == qc]
+                     and not _is_unconditional(b)
+                     and _context_tokens(b.context) == qc_tokens]
             if exact:
                 results = sorted(exact, key=lambda b: -score(b))
                 return results[:top_k]
