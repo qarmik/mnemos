@@ -1,0 +1,74 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.backends.legacy:build"
+
+[project]
+name = "mnemos"
+version = "0.25.0"
+description = "A human-centered AI memory architecture — structured belief reasoning across sessions"
+readme = "README.md"
+license = { file = "LICENSE" }
+requires-python = ">=3.10"
+authors = [
+    { name = "Qarmik", email = "" }
+]
+keywords = ["ai", "memory", "belief", "llm", "personalization"]
+
+# Core runtime dependency — only OpenAI is required.
+# chromadb, sentence-transformers, rank-bm25 are optional
+# (see [project.optional-dependencies] below).
+dependencies = [
+    "openai>=2.31.0",
+]
+
+[project.optional-dependencies]
+# Semantic search backend (not required for current prototype)
+semantic = [
+    "chromadb>=0.4.0",
+    "sentence-transformers>=2.7.0",
+    "rank-bm25>=0.2.2",
+]
+# Development tools
+dev = [
+    "pytest>=8.0.0",
+    "mypy>=1.10.0",
+    "ruff>=0.4.0",
+]
+
+[project.urls]
+Repository = "https://github.com/rohitkumar/mnemos"
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+# Minimal rule set — catch real issues without noise
+select = [
+    "E",    # pycodestyle errors
+    "F",    # pyflakes
+    "W",    # pycodestyle warnings
+    "I",    # isort
+    "UP",   # pyupgrade
+]
+ignore = [
+    "E501",  # line too long — handled by line-length above
+    "E741",  # ambiguous variable names — too noisy for this codebase
+]
+
+[tool.mypy]
+python_version = "3.10"
+# Run only on the public API surface — not the full codebase
+files = ["belief_extractor.py"]
+ignore_missing_imports = true
+warn_return_any = false
+# Don't fail on untyped functions in the existing codebase
+disallow_untyped_defs = false
+check_untyped_defs = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_functions = ["test_*"]
+# Verbose by default so FM numbers are visible in output
+addopts = "-v"
