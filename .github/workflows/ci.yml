@@ -1,0 +1,72 @@
+# MNEMOS CI
+#
+# Runs on every push to main and on pull requests targeting main.
+#
+# Two jobs:
+#   regression  — pytest tests/test_regression.py (12 FM regression tests)
+#   verify      — python verify.py (74 deterministic gate checks)
+#
+# What this covers:
+#   Gates 1-4, 6-10a, 10b, FM-155/156/157/163/165/170, graph invariants.
+#
+# What this does NOT cover (by design):
+#   Gate 5 (LLM extraction) — stochastic, requires OPENAI_API_KEY.
+#   Live session behavior, cross-session memory, UAI tracking.
+#   SP-1 (LLM coverage boundary) — structural property, not a bug.
+#   SP-2 (pessimistic-LLM hypothesis) — unvalidated until live API run.
+
+name: MNEMOS CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  regression:
+    name: Regression Suite (FM tests)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install "openai>=2.31.0"
+          pip install "pytest>=8.0.0"
+
+      - name: Run regression suite
+        run: pytest tests/test_regression.py -v
+
+  verify:
+    name: Deterministic Gate Verification
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install "openai>=2.31.0"
+
+      - name: Run verify script
+        run: |
+          python verify.py
+          echo "Deterministic core verified. Stochastic boundary (Gate 5/LLM) excluded by design."
