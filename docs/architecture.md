@@ -1,7 +1,7 @@
 # MNEMOS Architecture Reference
 
-**Version:** mnemos-lite v0.20
-**Status:** Operational — graph integrity confirmed, temporal consistency stable, 16 real sessions complete
+**Version:** mnemos-lite v0.25
+**Status:** Operational — graph integrity confirmed, temporal consistency stable, 16 real sessions complete, Phase 2 + Phase 3 adversarial sequences run, BeliefExtractor (L3 ingestion) operational
 
 ---
 
@@ -63,14 +63,17 @@ Beta(α,β) belief nodes with typed edges.
 - `remove_by_trait(trait, namespace)` — hard-deletes all beliefs matching a trait before writing a correction. No soft coexistence. Truth replaces prior. (v0.19 / FM-121)
 - `upsert_belief(belief)` — enforces one belief per trait per namespace. Updates in place if trait exists, else inserts. (v0.19 / FM-121)
 
-### L3 — Semantic Store
-Async consolidation. Beliefs graduate here from episodic records.
+### L3 — Semantic Store / Ingestion Layer
+The path from raw user utterance to validated structured belief. Two halves:
 
-- Domain-typed claims
+**Ingestion (v0.22+, implemented):** `BeliefExtractor` — 10-gate pipeline. LLM extracts structure; system decides truth. See *BeliefExtractor — 10-Gate Pipeline* section below for full specification.
+
+**Async consolidation (design target, not yet implemented):**
+- Domain-typed claims graduated from L1 episodic records
 - Self-consistency veracity scoring
 - Version diffing + drift alerts
 
-**Status: Design target — not yet implemented in prototype.**
+**Status:** Ingestion layer implemented (v0.22, hardened through v0.25). Async consolidation remains a design target.
 
 ### L4 — Inference Engine
 Read-only context assembly. Never writes to the graph.
@@ -179,6 +182,144 @@ Namespace-scoped objective configurations.
 
 ---
 
+## BeliefExtractor — 10-Gate Pipeline
+
+The L3 ingestion layer. Converts a user utterance into validated structured beliefs.
+
+**Core principle:** LLM extracts structure. System decides truth.
+
+The LLM (currently `gpt-5.4-mini`) is responsible for parsing natural language into `(trait, value, context, confidence)` tuples. Every other decision — what to write, what to reject, how to repair, when to invert polarity — is deterministic. The LLM never decides whether a belief enters the graph.
+
+**Falls back gracefully:** If no API key is available, deterministic gates 1-4 and 6-10 still run; Gate 5 returns empty; the extractor produces no beliefs but emits no errors. Pre-v0.22 pattern-based capture is no longer used.
+
+### Pipeline structure
+
+Sentence
+│
+├─ Controlled clause splitting
+│   (split on polarity change OR context change with new predicate;
+│    no split on shared predicate "I like coffee and tea")
+│
+└─ For each clause:
+Gate 1  — Temporal       (block "used to", "previously", "before I")
+Gate 2  — Uncertainty    (block "might", "not sure", "maybe")
+Gate 3  — Subject        (require explicit "I"; route relational to notes)
+Gate 4  — Context normalize (canonical form via CONTEXT_NORMALIZATIONS)
+Gate 5  — LLM extraction  (parse to (trait, value, context, confidence))
+Gate 6  — Value normalize (map to {like, dislike}; neutral → no write)
+Gate 7  — Object/trait validation
+Path A: simple repair when LLM context empty
+Path B: canonical-compound repair when LLM context set
+Gate 8  — Confidence filter (only "explicit" writes)
+Gate 9  — Context assignment validation (FM-153 — restrict over-assignment)
+Gate 10a — Negation enforcement (per-clause)
+After all clauses:
+Gate 10b — Negation enforcement (sentence-scope second pass) (FM-163)
+→ Validated beliefs flow to graph.upsert_belief()
+
+### Gate-by-gate specification
+
+**Gate 1 — Temporal.** Blocks past-state assertions like "I used to like prawns" — the user is reporting history, not current state. Pass-through overrides: "but now", "these days", "currently". State transitions ("stopped liking X") flip polarity rather than block.
+
+**Gate 2 — Uncertainty.** Blocks hedged statements: "might", "not sure", "maybe", "I think", "I guess". Comparative phrasing ("prefer X over Y") is also blocked. Directional preference with context ("prefer X at \<context\>") is allowed.
+
+**Gate 3 — Subject.** Requires explicit first-person subject. "My wife likes coffee" is routed to a relational note rather than written as a belief. "My wife and I both like coffee" passes (the "I" is explicit).
+
+**Gate 4 — Context normalization.** Maps raw context strings to canonical form via `CONTEXT_NORMALIZATIONS`. Returns `None` for empty / "general" / "none" — `None` is the engine's sole sentinel for "unconditional" (see Belief Data Model section).
+
+**Gate 5 — LLM extraction.** The single point where the LLM acts. Receives one clause, returns a list of `{trait, value, context, confidence}` dicts. Never decides whether to write.
+
+**Gate 6 — Value normalization.** Maps LLM-emitted value strings to `{like, dislike}`. Neutral, unrecognized, or empty values produce no write — absence is more honest than fabrication.
+
+**Gate 7 — Object/trait validation.** Two checks:
+- *Pronoun rejection (FM-155):* trait whose entity word is in `INVALID_TRAIT_OBJECTS` is rejected outright.
+- *Trait drift handling (FM-156, FM-170):* if a context word leaked into the trait name (e.g., `monday_meeting_preference`), attempt deterministic repair. Two paths:
+  - **Path A — LLM context empty:** move drift word into the context field. `monday_meeting_preference + None` → `meeting_preference + monday`.
+  - **Path B — LLM context set:** compose canonical compound from independently-normalized parts. `monday_meeting_preference + "morning"` → `meeting_preference + monday_morning` (only if the composed string is in `CANONICAL_COMPOUND_CONTEXTS`). Otherwise reject.
+
+The composed string is **never re-normalized** — that would reintroduce FM-169 substring shadowing inside the FM-170 fix.
+
+**Gate 8 — Confidence filter.** Only `confidence == "explicit"` writes proceed. `"implicit"` (LLM-inferred) is rejected.
+
+**Gate 9 — Context assignment validation (FM-153).** Post-LLM deterministic check. If the clause text contains an explicit restriction marker ("only X", "X only", "but only X"), context is valid only for the explicitly named object. All other objects' contexts are demoted to `None`. Object matching uses token-set intersection (no substring) — "tea" does not match "steak"; "car" does not match "carpet".
+
+**Gate 10a — Negation enforcement, per-clause (FM-154).** Detects "not at/in/during/on/when \<context\>" phrases inside the clause. For any belief whose context matches a negated context, force value to opposite of the trait's dominant (first-encountered, non-negated) value.
+
+**Gate 10b — Negation enforcement, sentence-scope second pass (FM-163).** After all clauses are processed, scan the full sentence for "not at/in/during/on/when \<context\>" phrases. For any existing belief (across all clauses) whose context matches a negated context, flip value to opposite of the trait's non-negated dominant.
+
+**Strict invariants on the sentence-scope pass:**
+- Operates only on beliefs that already exist in the extracted set.
+- Never creates beliefs.
+- Never infers missing targets.
+- Never expands scope beyond the negated context set.
+- Idempotent with Gate 10a (won't re-flip what was already corrected — guarded by `eb.value == dom` check).
+
+The system models observed structured statements, not logical negation. If the LLM did not produce a belief at the negated context, sentence-scope has nothing to flip; the negation intent is silently lost. This is acknowledged as **SP-1** (see Structural Properties).
+
+### Canonical compound contexts
+
+`CANONICAL_COMPOUND_CONTEXTS` is derived at module load from the values in `CONTEXT_NORMALIZATIONS` that contain underscores. The map is the authority on what compound contexts are recognized; if a Gate 7 Path B composition isn't in the set, the system refuses to fabricate it. Current set: `{after_lunch, before_bed, monday_morning, wife_cooks, with_family, with_friends}`.
+
+### Open / deferred items in the pipeline
+
+| FM | Issue | Status |
+|----|-------|--------|
+| FM-159 | Multi-context overlap (no hierarchy) | Deferred — representation work |
+| FM-162 | LLM soft power over context strings | Deferred — canonicalization scope |
+| FM-166 | Order-dependent dominance in sentence-scope | Deferred — heuristic limit |
+| FM-169 | Normalization map shadowing | Next priority — substring iteration order |
+| FM-171 | Asymmetric trait-level dominance | Deferred — representation |
+| FM-172 | Extracted-list duplicates pre-graph | Deferred — masked by upsert dedup |
+
+See `failure_modes.md` for full register.
+
+## Belief Data Model
+
+Structured belief fields (introduced v7, FM-76; updated v0.23 for FM-157).
+
+```python
+@dataclass
+class Belief:
+    trait:             str            # What aspect (e.g. 'response_style', 'prawns_preference')
+    value:             str            # Observed value (e.g. 'concise', 'dislike')
+    context:           Optional[str]  # When/where it applies — None = unconditional (FM-157)
+    exceptions:        List           # Noted exceptions
+    content:           str            # Auto-generated label
+    domain:            Domain         # See domains below
+    namespace:         str            # work / health / personal / research / ...
+    alpha:             float          # Beta distribution alpha
+    beta_:             float          # Beta distribution beta
+    evidence_count:    int            # Total interactions this belief appeared in
+    last_confirmed:    float          # Timestamp of last explicit confirmation
+    last_contradicted: float          # Timestamp of last contradiction (FM-83 recency override)
+    source_text:       str            # Evidence this belief was drawn from (FM-72)
+```
+
+`confidence = alpha / (alpha + beta_)`
+
+**Key insight:** `'concise at work'` and `'detailed when learning'` are two non-contradictory beliefs about the same trait. The `context` field is a hard gate in retrieval — not a soft hint.
+
+### `context=None` engine invariant (FM-157)
+
+The string `"general"` is **not** a valid engine-side value for `context`. `None` is the sole sentinel for "this belief is unconditional".
+
+- `"general"` is a UI/display label only. It may appear in rendered output; it never appears in engine state.
+- `add_belief()` normalizes legacy `"general"` / `""` strings to `None` at the API boundary.
+- `matches_context(query)` returns `True` for any query when `self.context is None` — this is the only wildcard.
+- For conditional beliefs (`context` is a string), `matches_context()` requires **token-set equality** with the query (FM-165). Tokenize on underscore and whitespace; require frozenset equality. No substring, no subset, no hierarchy.
+
+This invariant prevents two failure modes:
+- Pre-v0.23: `context=None` and `context="general"` were indistinguishable, causing overwrite collisions.
+- Pre-v0.24: `matches_context` used substring matching — `"night"` falsely matched `"midnight"`; `"work"` falsely matched `"homework"`.
+
+### Preference hard-write (v0.19 / FM-120 / FM-121)
+
+When a user explicitly corrects a preference ("No, I do NOT like prawns"), `_hard_write_preference()` calls `remove_by_trait()` to delete all prior beliefs for that trait, then `upsert_belief()` to write a single authoritative belief at alpha=5.0, beta_=0.9 (confidence ≈ 0.85). The graph holds exactly one truth. The LLM's conversation history is irrelevant to preference state.
+
+### Belief uniqueness key (v0.21 / FM-121)
+
+`graph.upsert_belief()` enforces uniqueness on `(trait, namespace, context)`. Different contexts for the same trait produce different beliefs — `coffee_preference + morning` and `coffee_preference + evening` coexist. Same `(trait, namespace, context)` updates in place; never duplicates.
+
 ## Belief Data Model
 
 Structured belief fields (introduced v7, FM-76).
@@ -222,29 +363,14 @@ class Belief:
 
 ---
 
-## Key Classes (v0.20)
+## Key Classes (v0.25)
 
 | Class | FMs Addressed | Responsibility |
 |-------|---------------|----------------|
-| `MnemosLite` | Orchestrator | `new_session()` / `ask()` / `digest()` / `save_session()` / `_canonicalize_query()` / `_detect_preference_correction()` / `_hard_write_preference()` |
-| `Belief` | 76, 67, 83, 84 | Structured belief with Beta(α,β). `apply_decay()`, `confidence_qualifier()`, `recency_boost()` |
-| `KnowledgeGraph` | 17, 22 | Beta nodes, BIZ propagation. `add_belief()` / `remove_by_trait()` / `upsert_belief()` / `search()` |
-| `EpisodicStore` | L1 | Write-once records. BM25 + ChromaDB hybrid with RRF fusion |
-| `FastPath` | L0, 24 | TTL 72h in-memory cache. Volatility scoring |
-| `PersistentProfile` | 113, 115, 116–121 | Disk-backed cross-session memory. SEMANTIC_TOPICS conflict dedup. Differential decay. Cold-start preference gating |
-| `SessionSynthesizer` | 105, 107, 94 | Compressed user model every 5 turns. `_capture_immediate()` / `_is_declarative()` / `_synthesize()` |
-| `LongTermBehavior` | 89, 93 | Cross-session behavioral baseline. Per-topic answer/reflect preference |
-| `InteractionMemory` | 85–93 | Reflection budget, resistance, re-entry, FM-93 preference gate. `should_reflect()` / `record_exchange()` |
-| `SocialStateTracker` | 102–108 | Live adversarial/depth/trust state across turns. `system_notes()` for prompt injection |
-| `EmotionIntensityClassifier` | 101 | LOW / MEDIUM / HIGH tiers. `system_note()` per tier |
-| `FrustrationTracker` | 98 | Frustration → change approach immediately. `system_note()` |
-| `ConversationalRegister` | 100 | Casual register → prose instruction. `is_casual()` / `system_note()` |
-| `CalibratedInferencer` | 105 | Probabilistic inference from session context with stated confidence |
-| `AutonomyTracker` | 61, 70, 79 | Counterfactual UAI. `natural_r` vs `prompted_r`. Minimum 3 natural interactions before delta penalty applies |
-| `ResponseValidator` | 78, 82 | `CONSTRAINT_EXPANSIONS`: shellfish → shrimp/prawn/crab/lobster/... `validate()` |
-| `ForgettingPolicy` | 71 | PAWD decay + entropy retire + retrieval penalty |
-| `FMRegister` | 14, 50 | Immutable append-only failure mode register. `log()` / `summary()` |
-
+| `MnemosLite` | Orchestrator | `new_session()` / `ask()` / `digest()` / `save_session()` / `_canonicalize_query()` / `_extract_and_write_beliefs()` / `_hard_write_preference()` |
+| `BeliefExtractor` | 147, 150–157, 163, 170 | L3 ingestion (v0.22+). 10-gate pipeline. LLM extracts structure; system decides truth. `extract()` / `extract_with_trace()` |
+| `Belief` | 76, 67, 83, 84, 157, 165 | Structured belief with Beta(α,β). `context: Optional[str]` (None = unconditional). `matches_context()` uses token-set equality |
+| `KnowledgeGraph` | 17, 22, 121, 165 | Beta nodes, BIZ propagation. `add_belief()` / `remove_by_trait()` / `upsert_belief()` / `search()` with token-set context match |
 ---
 
 ## InteractionMemory Priority Stack
@@ -263,7 +389,7 @@ The exact order in which `ask()` makes interaction decisions. Higher priority ga
 
 ---
 
-## Cross-Session Memory Architecture (v0.14+)
+## Cross-Session Memory Architecture (v0.14+, ingestion updated v0.22+)
 
 ```
 Session end:
@@ -282,9 +408,15 @@ Session start:
     → context_for_session() returns identity-class facts only (preference-class suppressed)
     → Cold-start: persona, workplace, relational facts shown; prawns preference not shown
 
-Per-turn:
-  _capture_immediate(text) [FM-117 gate: declarative statements only, never questions]
-    → Immediate facts written to _facts and long_term._session_facts
+Per-turn (v0.22+):
+  _extract_and_write_beliefs(text)
+    → BeliefExtractor.extract(text)
+        → Per-clause: Gates 1–10a (temporal, uncertainty, subject, context-norm,
+                                    LLM, value-norm, object, confidence,
+                                    context-assignment, per-clause negation)
+        → Sentence-scope: Gate 10b (cross-clause negation enforcement)
+    → For each validated belief: graph.upsert_belief(belief) at conf=0.85
+    → Falls back to v0.21 patterns if OpenAI API unavailable
 
 Preference correction:
   _detect_preference_correction(text) [single-fire: only when response_text == ""]
@@ -292,22 +424,13 @@ Preference correction:
         → graph.remove_by_trait(trait)   [hard delete all prior beliefs for this trait]
         → graph.upsert_belief(new_belief) [one authoritative belief at conf=0.85]
         → synthesizer._facts purged of opposite signal
-```
 
----
+```
 
 ## Version Arc
 
 | Version | Core Question | Key Mechanism |
 |---------|---------------|---------------|
-| v1 | What to store? | Separation of salience and truth |
-| v2 | How to behave? | Fast path + Deep path + BIZ |
-| v3 | How to learn? | L10 Meta-Memory, L15 Adversarial |
-| v4 | When to stop? | Non-Adaptive Core, L13 Causal |
-| v5 | What don't I know? | FM Register open forever |
-| v6 | How to govern? | L16 Context Policy, namespace cap |
-| v7 | What do I owe the human? | Identity Coherence, Cognitive Autonomy, EVALUATIVE domain |
-| v7.1 | Empirically hardened? | UAI 0.40 floor, Continuity Drill |
 | v0.1–v0.7 | What breaks in code? | Full prototype, FM-61 through FM-93 |
 | v0.8 | Real-session calibration (sessions 1–3) | FM-94–101: persona routing, topic key, emotion, register |
 | v0.9–v0.11 | Social intelligence + identity coherence (sessions 4–7) | FM-102–112: SocialStateTracker, SessionSynthesizer, persona payload |
@@ -320,3 +443,44 @@ Preference correction:
 | v0.18 | FM-120: in-session preference decay | Hard-write on correction, proactive surfacing gate |
 | v0.19 | FM-121: belief graph corruption | remove_by_trait(), upsert_belief(), single-fire gate |
 | v0.20 | PREFERENCE CONFIRMATION RULE | Reaffirmation is not contradiction |
+| v0.21 | Sequence test phase | FM-147–152: pattern-list limits exposed, context collapse on conditional, multi-context collapse |
+| v0.22 | BeliefExtractor — L3 ingestion live | FM-153–155: 8-gate pipeline (temporal, uncertainty, subject, context-norm, LLM, value-norm, object, confidence). LLM extracts structure; system decides truth |
+| v0.23 | Engine invariants + token-exact ingestion | FM-156: Gate 7 simple repair. FM-157: `context=None` engine-wide. Gate 9 token-exact restriction matching |
+| v0.24 | Cross-clause negation + retrieval discipline | FM-160/163: sentence-scope Gate 10 second pass. FM-161/165: token-set equality at retrieval (`matches_context`, `graph.search` phase 1) |
+| v0.25 | Truth preservation under compound input | FM-170: Gate 7 Path B canonical compound repair (independent normalization, composed underscore, validated against `CANONICAL_COMPOUND_CONTEXTS`). Composed string never re-normalized — would reintroduce FM-169 |
+
+---
+
+## Phase Roadmap
+
+| Phase | Scope | Status |
+|-------|-------|--------|
+| Phase A | Contextual belief system invariants | Done (v0.21) |
+| Phase B | L3 ingestion correctness — BeliefExtractor | Done (v0.22 → v0.25) |
+| Phase C | Context interpretation — normalization, compatibility, hierarchy | Next. FM-169 (normalization shadowing) is the first concrete fix in this phase. FM-159 (multi-context overlap) is the larger representation question. |
+| Phase D | L3 async consolidation, L10 meta-memory | Later |
+| Phase E | L7 grounding, L11 arbitration, L16 policy | Later |
+
+The roadmap is sequenced. Phase C cannot start cleanly while Phase B has open critical issues; Phase D representation work depends on Phase C decisions about hierarchy.
+
+---
+
+## Structural Properties
+
+These are not failure modes. They are permanent properties of the current architecture, named explicitly so future work does not mistake them for bugs.
+
+### SP-1 — Determinism Conditional on LLM Coverage
+
+The deterministic gates govern which raw beliefs become final beliefs. They cannot govern which raw beliefs the LLM produces. A negation, restriction, or correction targeting a belief the LLM never materialized cannot be applied by any gate.
+
+This is the boundary between extraction (LLM, stochastic) and validation (gates, deterministic). The system is "deterministic over a stochastic source," not fully deterministic.
+
+### SP-2 — Pessimistic-LLM Hypothesis Unvalidated
+
+The FM-163 (sentence-scope negation) fix corrects beliefs that the LLM extrapolates with wrong polarity into a separated negation clause. Whether `gpt-5.4-mini` actually produces those extrapolated beliefs in production is unverified.
+
+If the LLM faithfully returns no beliefs for isolated "not at X" clauses, the fix has no inputs to correct, and the negation intent is silently lost (SP-1).
+
+A live API run is required to determine which case occurs in practice. This will resolve when adversarial sequences are run against the real API endpoint rather than simulated LLM output.
+
+See `failure_modes.md` for the full register and `sequence_results.md` for the test-execution log demonstrating both SP-1 and SP-2 in Phase 3.
