@@ -58,3 +58,4 @@ desktop.ini
 .env
 *.env
 .env.*
+.claude/
