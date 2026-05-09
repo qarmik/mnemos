@@ -46,6 +46,14 @@ import argparse
 from dataclasses import dataclass
 from typing import List, Optional
 
+# Windows cp1252 fix: reconfigure stdout to UTF-8 if possible,
+# otherwise fall back gracefully. This avoids needing PYTHONIOENCODING.
+if hasattr(sys.stdout, 'reconfigure'):
+    try:
+        sys.stdout.reconfigure(encoding='utf-8')
+    except Exception:
+        pass  # already utf-8 or reconfigure not supported — fine
+
 
 # ── Result tracking ───────────────────────────────────────────────────
 
@@ -500,14 +508,14 @@ def run_all(verbose: bool = False) -> bool:
     any_unexpected_failure = False
 
     for suite_name, (passed, total, checks) in suite_results.items():
-        status = "✓" if passed == total else "✗"
+        status = "PASS" if passed == total else "FAIL"
         print(f"  {status}  {suite_name}  ({passed}/{total})")
         total_passed += passed
         total_checks += total
 
         if verbose or passed < total:
             for r in checks:
-                icon = "    ✓" if r.passed else "    ✗"
+                icon = "      ok" if r.passed else "  FAIL"
                 fm_tag = f" [{r.fm}]" if r.fm else ""
                 print(f"{icon} {r.name}{fm_tag}")
                 if not r.passed and r.detail:
