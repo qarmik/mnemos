@@ -1,6 +1,6 @@
 # MNEMOS Failure Mode Register
 
-**FM-01 through FM-172 catalogued** *(with permanent gaps at FM-122–146 and FM-158–162)*
+**FM-01 through FM-172 catalogued** *(with permanent gap at FM-122–146 only; FM-158–162 are assigned)*
 *Last updated: v0.25 / 16 real sessions + Phase 2 & Phase 3 adversarial runs / April 2026*
 
 The FM Register is the adversarial spine of MNEMOS. Every failure mode is identified, named, fixed, and measured. The register is never closed — FM-173 is waiting in the next session or adversarial run.
@@ -648,8 +648,9 @@ SP-1, SP-2:       structural properties, not failure modes
 
 Active critical FMs: none
 Next open number: FM-173+
-Numbering policy: gaps are not backfilled. FM-122 through FM-146 and
-FM-158 through FM-162 remain permanently empty.
+Numbering policy: gaps are not backfilled. FM-122 through FM-146
+remain permanently empty (numbering error preserved for stability
+of existing references).
 ```
 
 ---
