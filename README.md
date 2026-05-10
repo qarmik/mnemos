@@ -117,10 +117,10 @@ That question became MNEMOS.
 
 ## The Core Principle
 
-> *Store everything. Reason carefully. Trust nothing blindly.*
+> *Store only validated current truth representations. Reason carefully. Trust nothing blindly.*
 > *Respond fast. Degrade gracefully. Serve without replacing the human.*
 
-Invariant across every version.
+Invariant across every version beginning with v0.22, when the BeliefExtractor pipeline made the system actively filter, reject, and discard. The earlier "Store everything" framing described pre-v0.22 behavior; the implementation has not stored everything since Gates 1–4 and 6–10 went live. The slogan now matches the engine.
 
 ---
 
@@ -234,7 +234,7 @@ The constitution of MNEMOS. No layer may violate them.
 
 ## The Failure Mode Register
 
-172 failure modes catalogued across simulation, real sessions, and adversarial sequence phases. Numbering has permanent gaps at FM-122–146 and FM-158–162 (numbering convenience, not unrecorded failures). Selected:
+172 failure modes catalogued across simulation, real sessions, and adversarial sequence phases. Numbering has a permanent gap at FM-122–146 (a numbering error preserved for stability of existing references). Selected:
 
 | FM | Name | The failure | The fix |
 |----|------|-------------|---------|
