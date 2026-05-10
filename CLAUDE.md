@@ -3,8 +3,8 @@
 ## What this repo is
 
 MNEMOS is a structured AI memory architecture — 17 layers, 9 axioms,
-172 failure modes catalogued (FM-01 through FM-172, with permanent
-numbering gaps at FM-122–146 and FM-158–162).
+172 failure modes catalogued (FM-01 through FM-172, with a permanent
+numbering gap at FM-122–146).
 
 Current working artifacts:
 - `mnemos_lite.py` — core orchestrator (~2860 lines, v0.25)
@@ -14,7 +14,10 @@ Current working artifacts:
 Read `README.md` before any non-trivial change. Read
 `docs/architecture.md` before touching the gate pipeline or
 `BeliefExtractor`. Read `docs/failure_modes.md` before naming
-a new failure mode — check the register first.
+a new failure mode — check the register first. Read
+`docs/context_semantics.md` before any change touching context
+representation, normalization, or retrieval matching — it is the
+governing spec for that surface.
 
 ## Runtime — critical
 
@@ -108,6 +111,32 @@ python verify.py
 CI runs checks 2 and 3 automatically on push to main
 (`.github/workflows/ci.yml`). Do not rely on CI as a substitute
 for running locally first.
+
+## Cowork sandbox limitations
+
+The Cowork sandbox can read repo files, run tests, and write source
+files on the mounted Windows filesystem. It cannot delete or rename
+files, which is what git needs to finalize commits (writing
+`.git/index.lock` then renaming it to update the index).
+
+Symptom: any `git commit` or `git push` initiated from the sandbox
+leaves stale `.git/index.lock` or `.git/HEAD.lock` behind. The
+commit may or may not succeed; subsequent commands block until the
+lock is cleared manually.
+
+Reliable pattern:
+- Stage from the sandbox if convenient (`git add` is safe).
+- Commit and push natively from a Git Bash terminal on the host.
+- For multi-line commit messages: write to `commit_msg.txt` in the
+  repo, then `git commit -F commit_msg.txt` from native bash.
+- If a sandbox attempt left lock files: `rm .git/index.lock
+  .git/HEAD.lock` from native bash before the next command.
+- **Never manually delete lock files from inside the sandbox.**
+  The mount semantics can cause inconsistent state, phantom lock
+  reappearance, or partial cleanup. Native bash only.
+
+This applies only to git write operations. Read-only git commands
+(`git status`, `git log`, `git diff`) are safe from the sandbox.
 
 ## FM-169 — next priority (do not implement without Commander V review)
 
