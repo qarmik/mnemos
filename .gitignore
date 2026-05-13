@@ -59,3 +59,4 @@ desktop.ini
 *.env
 .env.*
 .claude/
+commit_msg.txt
